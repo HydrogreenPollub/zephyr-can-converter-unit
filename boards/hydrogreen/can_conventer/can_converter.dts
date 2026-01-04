@@ -1,0 +1,230 @@
+/dts-v1/;
+#include <st/g4/stm32g491Xe.dtsi>
+#include <st/g4/stm32g491c(c-e)tx-pinctrl.dtsi>
+
+#include <zephyr/dt-bindings/led/led.h>
+
+/ {
+	model = "Hydrogreen Can converter board";
+	compatible = "hydrogreen,can-converter";
+
+
+	aliases {
+		can-rx-led = &can_rx_led;
+		can-tx-led = &can_tx_led;
+		rs485-rx-led = &rs485_rx_led;
+		rs485-tx-led =&rs485_tx_led;
+		status-led = &status_led;
+		can = &fdcan2;
+		rs485 = &usart1;
+		rs485-dir = &rs485_dir_pin;
+		button-test = &button_test;
+		watchdog0 = &iwdg;
+		die-temp0 = &die_temp;
+		volt-sensor0 = &vref;
+		volt-sensor1 = &vbat;
+	};
+
+	chosen {
+		zephyr,console = &usart3;
+		zephyr,shell-uart = &usart3;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,canbus = &fdcan2;
+		zephyr,code-partition = &slot0_partition;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		can_rx_led: led_pa0 {
+			gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+			label = "CAN Rx LED";
+		};
+		can_tx_led: led_pa1 {
+			gpios = <&gpioa 1 GPIO_ACTIVE_HIGH>;
+			label = "CAN Tx LED";
+		};
+		rs485_rx_led: led_pa2 {
+			gpios = <&gpioa 2 GPIO_ACTIVE_HIGH>;
+			label = "RS485 Rx LED";
+		};
+		rs485_tx_led: led_pa3 {
+			gpios = <&gpioa 3 GPIO_ACTIVE_HIGH>;
+			label = "RS485 Tx LED";
+		};
+		status_led: led_pa4 {
+			gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;
+			label = "Status LED";
+		};
+			rs485_dir_pin: dir_pin_pa12 {
+			gpios = <&gpioa 12 GPIO_ACTIVE_HIGH>;
+			label = "RS485 Direction Pin";
+		};
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		debounce-interval-ms = <0>;
+		button_test: button_pc13 {
+			gpios = <&gpioc 13 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			label = "test button";
+		};
+	};
+};
+
+&gpioa {
+	status = "okay";
+};
+
+&gpiob {
+	status = "okay";
+};
+
+
+&clk_lsi {
+	status = "okay";
+};
+
+&clk_hsi48 {
+	status = "okay";
+};
+
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(24)>;
+	status = "okay";
+};
+
+&clk_hsi {
+	status = "okay";
+};
+
+&pll {
+	div-m = <6>;
+	mul-n = <85>;
+	div-p = <7>;
+	div-q = <2>;
+	div-r = <2>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(170)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <1>;
+	apb2-prescaler = <1>;
+};
+
+
+&usart1 {
+	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+	pinctrl-names = "default";
+	current-speed = <9600>;
+	status = "okay";
+};
+
+
+&usart3 {
+	pinctrl-0 = <&usart3_tx_pb10 &usart3_rx_pb11>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+
+
+//&timers2 {
+//	status = "okay";
+//
+//	pwm2: pwm {
+//		status = "okay";
+//		pinctrl-0 = <&tim2_ch1_pa5>;
+//		pinctrl-names = "default";
+//	};
+//};
+//
+//&timers3 {
+//	st,prescaler = <10000>;
+//	status = "okay";
+//	pwm3: pwm {
+//		status = "okay";
+//		pinctrl-0 = <&tim3_ch1_pb4>;
+//		pinctrl-names = "default";
+//	};
+//};
+
+stm32_lp_tick_source: &lptim1 {
+	clocks = <&rcc STM32_CLOCK_BUS_APB1 0x80000000>,
+			 <&rcc STM32_SRC_LSI LPTIM1_SEL(1)>;
+	status = "okay";
+};
+
+&rtc {
+	clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00000400>,
+			 <&rcc STM32_SRC_LSI RTC_SEL(2)>;
+	status = "okay";
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(34)>;
+		};
+		slot0_partition: partition@8800 {
+			label = "image-0";
+			reg = <0x00008800 DT_SIZE_K(240)>;
+		};
+		slot1_partition: partition@44800 {
+			label = "image-1";
+			reg = <0x00044800 DT_SIZE_K(234)>;
+		};
+		/* Set 4Kb of storage at the end of the 512Kb of flash */
+		storage_partition: partition@7f000 {
+			label = "storage";
+			reg = <0x0007f000 DT_SIZE_K(4)>;
+		};
+	};
+};
+
+&iwdg {
+	status = "okay";
+};
+
+&rng {
+	status = "okay";
+};
+
+
+&die_temp {
+	status = "okay";
+};
+
+//&fdcan1 {
+//	clocks = <&rcc STM32_CLOCK_BUS_APB1 0x02000000>,
+//			 <&rcc STM32_SRC_HSE FDCAN_SEL(0)>;
+//	pinctrl-0 = <&fdcan1_rx_pa11 &fdcan1_tx_pa12>;
+//	pinctrl-names = "default";
+//	status = "okay";
+//};
+
+&fdcan2 {
+	pinctrl-0 = <&fdcan2_rx_pb12 &fdcan2_tx_pb13>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&vref {
+	status = "okay";
+};
+
+&vbat {
+	status = "okay";
+};
+
+

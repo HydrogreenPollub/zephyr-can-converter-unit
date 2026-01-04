@@ -1,0 +1,19 @@
+# West managed directories
+.west/
+zephyr/
+modules/
+bootloader/
+
+# Build artifacts
+build/
+build*/
+
+# Python virtual environment
+.venv/
+
+# Misc OS / IDE files
+*.pyc
+*~
+.DS_Store
+.idea/
+*.suo
