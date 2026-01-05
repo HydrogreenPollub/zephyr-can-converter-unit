@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13.1)
 
 if(NOT DEFINED BOARD)
-    set(BOARD steering_wheel CACHE STRING "Zephyr target board")
+    set(BOARD can_converter CACHE STRING "Zephyr target board")
     message(STATUS "BOARD not defined externally, using default: ${BOARD}")
 endif()
 
