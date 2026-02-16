@@ -20,6 +20,7 @@ jobs:
         with:
           path: zephyr-can-converter-unit
           clean: true
+          submodules: recursive
 
       - name: Build
         run: |
