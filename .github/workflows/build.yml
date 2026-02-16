@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: zephyrprojectrtos/ci:v0.27.0
+    container: zephyrprojectrtos/ci:latest
 
     steps:
       - name: Initialize workspace
