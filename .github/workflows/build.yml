@@ -1,36 +1,24 @@
-name: Build Zephyr firmware
+name: Build Zephyr Firmware
 
 on: [push, pull_request]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: zephyrprojectrtos/ci:v0.27.0
 
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.13
-
-      - name: Install west
-        run: pip install west
-
       - name: Initialize workspace
         run: |
           west init -m https://github.com/HydrogreenPollub/zephyr-manifest --mr main .
           west update
+          west zephyr-export
 
-      - name: Checkout application with overwrite
+      - name: Checkout application
         uses: actions/checkout@v4
         with:
           path: zephyr-can-converter-unit
           clean: true
-
-      - name: Setup Zephyr SDK
-        uses: zephyrproject-rtos/action-zephyr-setup@v1
-        with:
-          app-path: "."
-          toolchains: arm-zephyr-eabi
 
       - name: Build
         run: |
