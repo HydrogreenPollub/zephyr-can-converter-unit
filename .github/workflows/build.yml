@@ -1,0 +1,34 @@
+name: Build Zephyr firmware
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: zephyr-zl27arm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.13
+
+      - name: Setup Zephyr project
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: zephyr-zl27arm
+          toolchains: arm-zephyr-eabi
+
+      - name: Build
+        run: |
+          west build -p always -b stm32_min_dev/stm32f103xb zephyr-zl27arm
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: build/zephyr/zephyr.bin
