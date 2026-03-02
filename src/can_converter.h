@@ -16,20 +16,6 @@
 #include "can_ids.h"
 #include "gpio.h"
 
-#define CAN_FILTER(_id)                                                        \
-  { .id = (_id), .mask = CAN_STD_ID_MASK, .flags = 0U }
-
-typedef struct {
-  const struct device *can_device;
-  struct gpio_dt_spec can_tx_led;
-  struct gpio_dt_spec can_rx_led;
-} ccu_can_t;
-
-typedef struct {
-  const struct device *rs485_device;
-  struct gpio_dt_spec rs485_tx_led;
-  struct gpio_dt_spec rs485_rx_led;
-}ccu_rs485_t;
 
 void can_converter_init();
 

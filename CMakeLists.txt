@@ -21,9 +21,11 @@ target_include_directories(app PRIVATE
 target_sources(app PRIVATE
         src/main.c
         src/can_converter.c
-        peripherals/can.c
-        peripherals/gpio.c
         peripherals/adc.c
-        peripherals/pwm.c
+        #peripherals/can.c
         peripherals/counter.c
+        peripherals/gpio.c
+        peripherals/pwm.c
+        #peripherals/rs485.c
+        #peripherals/uart.c
 )
