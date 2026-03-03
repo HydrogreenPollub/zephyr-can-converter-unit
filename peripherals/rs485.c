@@ -23,13 +23,13 @@ int rs485_init(const struct device* dev, struct gpio_dt_spec *dir)
     int ret;
 
     ret = uart_device_init(dev);
-    if (!ret) {
+    if (ret != 0) {
         LOG_ERR("RS485 device not ready");
         return -ENODEV;
     }
 
     ret = gpio_init(dir, GPIO_OUTPUT_INACTIVE);
-    if (!ret) {
+    if (ret != 0) {
         LOG_ERR("RS485 direction pin not ready");
         return -1;
     }

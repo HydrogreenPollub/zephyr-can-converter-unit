@@ -14,5 +14,9 @@ LOG_MODULE_REGISTER(main);
 int main(void)
 {
     can_converter_init();
+
+    while (1) {
+        can_converter_tick();
+    }
     return 0;
 }

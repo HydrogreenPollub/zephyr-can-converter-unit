@@ -1,8 +1,10 @@
 /dts-v1/;
 #include <st/g4/stm32g491Xe.dtsi>
 #include <st/g4/stm32g491c(c-e)tx-pinctrl.dtsi>
-
 #include <zephyr/dt-bindings/led/led.h>
+
+// reference manual stm32g491cet6
+// https://www.st.com/resource/en/reference_manual/dm00355726-stm32g4-series-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
 
 / {
 	model = "Hydrogreen Can converter board";
@@ -56,7 +58,7 @@
 			gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;
 			label = "Status LED";
 		};
-			rs485_dir_pin: dir_pin_pa12 {
+		rs485_dir_pin: dir_pin_pa12 {
 			gpios = <&gpioa 12 GPIO_ACTIVE_HIGH>;
 			label = "RS485 Direction Pin";
 		};
@@ -117,14 +119,24 @@
 	apb2-prescaler = <1>;
 };
 
-
+// reference manual page 420 (dmamux)
 &usart1 {
 	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
 	pinctrl-names = "default";
 	current-speed = <9600>;
 	status = "okay";
+	dmas = <&dmamux1 2 25 STM32_DMA_PERIPH_TX>,
+		   <&dmamux1 1 24 STM32_DMA_PERIPH_RX>;
+	dma-names = "tx", "rx";
 };
 
+&dma1 {
+	status = "okay";
+};
+
+&dmamux1 {
+	status = "okay";
+};
 
 &usart3 {
 	pinctrl-0 = <&usart3_tx_pb10 &usart3_rx_pb11>;
@@ -215,6 +227,8 @@ stm32_lp_tick_source: &lptim1 {
 //};
 
 &fdcan2 {
+		clocks = <&rcc STM32_CLOCK_BUS_APB1 0x02000000>,
+				 <&rcc STM32_SRC_PCLK FDCAN_SEL(1)>;
 	pinctrl-0 = <&fdcan2_rx_pb12 &fdcan2_tx_pb13>;
 	pinctrl-names = "default";
 	status = "okay";

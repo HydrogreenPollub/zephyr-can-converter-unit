@@ -21,7 +21,7 @@ int uart_rx_init(const struct device* dev, uint8_t* buf, size_t len, int32_t tim
 
 int uart_device_init(const struct device* dev) {
     if (!device_is_ready(dev)) {
-        LOG_ERR("UART device not ready\n");
+        LOG_ERR("UART device not ready");
         return -ENODEV;
     }
     LOG_INF("UART device ready");

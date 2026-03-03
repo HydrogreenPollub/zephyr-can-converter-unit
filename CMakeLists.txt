@@ -26,4 +26,6 @@ target_sources(app PRIVATE
         peripherals/adc.c
         peripherals/pwm.c
         peripherals/counter.c
+        peripherals/uart.c
+        peripherals/rs485.c
 )
