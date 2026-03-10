@@ -24,10 +24,11 @@ int can_send_(const struct device *can_dev, uint16_t id, uint8_t *data,
   struct can_frame frame = {0};
   frame.id = id;
   frame.dlc = data_len;
+  frame.flags = 0;
 
-  strncpy(frame.data, (char *)data, data_len);
+  memcpy(frame.data, data, data_len);
 
-  return can_send(can_dev, &frame, K_FOREVER, NULL, NULL);
+  return can_send(can_dev, &frame, K_MSEC(100), NULL, NULL);
 }
 
 int can_send_float(const struct device *can_dev, uint16_t id, float value) {
@@ -49,7 +50,7 @@ int can_add_rx_filter_(const struct device *can_dev,
 int can_init(const struct device *can_dev, uint32_t baudrate) {
   struct can_timing timing;
   int ret;
-  ret = can_calc_timing(can_dev, &timing, baudrate, 0);
+  ret = can_calc_timing(can_dev, &timing, baudrate, 875);
   if (ret > 0) {
     LOG_INF("Sample-Point error: %d", ret);
   }

@@ -105,7 +105,7 @@
 	div-m = <1>;
 	mul-n = <10>;
 	div-p = <2>;
-	div-q = <4>;
+	div-q = <2>;
 	div-r = <2>;
 	clocks = <&clk_hsi>;
 	status = "okay";
@@ -123,7 +123,7 @@
 &usart1 {
 	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
 	pinctrl-names = "default";
-	current-speed = <9600>;
+	current-speed = <115200>;
 	status = "okay";
 	dmas = <&dmamux1 2 25 STM32_DMA_PERIPH_TX>,
 		   <&dmamux1 1 24 STM32_DMA_PERIPH_RX>;
@@ -228,7 +228,7 @@ stm32_lp_tick_source: &lptim1 {
 
 &fdcan2 {
 		clocks = <&rcc STM32_CLOCK_BUS_APB1 0x02000000>,
-				 <&rcc STM32_SRC_PCLK FDCAN_SEL(1)>;
+				 <&rcc STM32_SRC_PLL_Q FDCAN_SEL(1)>;
 	pinctrl-0 = <&fdcan2_rx_pb12 &fdcan2_tx_pb13>;
 	pinctrl-names = "default";
 	status = "okay";

@@ -4,19 +4,21 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/spi.h>
 #include <zephyr/sys/util.h>
+#include "can_converter_can.hpp"
+#include "can_converter_rs485.hpp"
 
-#include "can_converter.h"
 
 LOG_MODULE_REGISTER(main);
 
 int main(void)
 {
-    can_converter_init();
+    ccu_can_init();
+    ccu_rs485_init();
 
-    while (1) {
-        can_converter_tick();
-    }
+    // while (1) {
+    // //     k_sleep(K_FOREVER);
+    //     lcu_on_tick();
+    // }
     return 0;
 }

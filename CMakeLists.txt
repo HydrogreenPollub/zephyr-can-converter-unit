@@ -10,17 +10,20 @@ if(NOT DEFINED BOARD_ROOT)
 endif()
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(app LANGUAGES C)
+project(app LANGUAGES C CXX)
 
 target_include_directories(app PRIVATE
         peripherals
         can-definitions
         src
+        hmi_parser
 )
 
 target_sources(app PRIVATE
-        src/main.c
-        src/can_converter.c
+        src/main.cpp
+        src/can_converter.cpp
+        src/can_converter_can.cpp
+        src/can_converter_rs485.cpp
         peripherals/can.c
         peripherals/gpio.c
         peripherals/adc.c
@@ -29,3 +32,5 @@ target_sources(app PRIVATE
         peripherals/uart.c
         peripherals/rs485.c
 )
+
+target_compile_features(app PRIVATE cxx_std_17)

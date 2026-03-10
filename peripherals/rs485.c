@@ -7,6 +7,7 @@
 LOG_MODULE_REGISTER(rs485);
 
 struct k_mutex tx_mutex;
+struct k_sem tx_done_sem;
 
 int rs485_set_rx(struct gpio_dt_spec *gpio)
 {
@@ -43,16 +44,19 @@ int rs485_init(const struct device* dev, struct gpio_dt_spec *dir)
 int rs485_send(const struct device* dev, struct gpio_dt_spec *dir, const uint8_t *data, size_t len)
 {
     k_mutex_lock(&tx_mutex, K_FOREVER);
-
     rs485_set_tx(dir);
 
     int ret = uart_tx(dev, data, len, SYS_FOREVER_MS);
     if (ret != 0) {
+        LOG_ERR("RS485 TX failed");
         rs485_set_rx(dir);
         k_mutex_unlock(&tx_mutex);
-        LOG_ERR("RS485 TX failed");
         return ret;
     }
+    k_sem_take(&tx_done_sem, K_MSEC(100));
+
+    rs485_set_rx(dir);
+    k_mutex_unlock(&tx_mutex);
 
     return 0;
 }
