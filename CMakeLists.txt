@@ -31,6 +31,7 @@ target_sources(app PRIVATE
         peripherals/counter.c
         peripherals/uart.c
         peripherals/rs485.c
+        can-definitions/candef.c
 )
 
 target_compile_features(app PRIVATE cxx_std_17)
