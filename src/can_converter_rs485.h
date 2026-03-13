@@ -12,10 +12,7 @@
 #include <zephyr/logging/log.h>
 #include "gpio.h"
 #include "rs485.h"
-#include "can.h"
-#include "can_ids.h"
-#include "hmi_parser_zephyr.hpp"
-#include "can_converter.hpp"
+#include "can_converter.h"
 
 typedef struct {
     const struct device *device;
@@ -31,8 +28,6 @@ typedef struct {
     uint8_t len;
 } rs485_packet_t;
 
-
-extern master_data_t data;
 
 void ccu_rs485_init();
 

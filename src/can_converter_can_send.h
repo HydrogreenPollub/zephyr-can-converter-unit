@@ -1,7 +1,7 @@
 #ifndef CAN_CONVERTER_CAN_SEND_H
 #define CAN_CONVERTER_CAN_SEND_H
 
-#include "can_converter.hpp"
+#include "can_converter.h"
 
 void send_mcu_state(const MasterStatus *s);
 

@@ -1,5 +1,5 @@
-#include "can_converter_can.hpp"
-#include "can_converter_can_send.hpp"
+#include "can_converter_can.h"
+#include "can_converter_can_send.h"
 #include "candef.h"
 
 LOG_MODULE_REGISTER(ccu_can, LOG_LEVEL_INF);
@@ -76,7 +76,7 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
     while (1) {
         k_sleep(K_MSEC(10));
 
-        master_data_t d = {};
+        master_data_t d = {0};
         k_mutex_lock(&data_mutex, K_FOREVER);
         d = data;
         k_mutex_unlock(&data_mutex);
@@ -102,9 +102,9 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
         if (cnt_100ms >= 10) {
             cnt_100ms = 0;
 
-            d.master_measurements.fuelCellOutputVoltage = 21.0f;
-            d.master_measurements.supercapacitorVoltage = 37.0f;
-            d.master_measurements.accelPedalVoltage = fake_accel;
+            d.master_measurements.fuel_cell_output_voltage = 21.0f;
+            d.master_measurements.supercapacitor_voltage = 37.0f;
+            d.master_measurements.accel_pedal_voltage = fake_accel;
 
             send_mcu_analog_pedals(&d.master_measurements);
             send_mcu_analog_powertrain(&d.master_measurements);

@@ -10,7 +10,7 @@
 #include "can.h"
 #include "gpio.h"
 #include "rs485.h"
-#include "can_converter.hpp"
+#include "can_converter.h"
 
 #define CAN_FILTER(_id) { .id = (_id), .mask = CAN_STD_ID_MASK, .flags = 0U }
 

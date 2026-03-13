@@ -1,5 +1,5 @@
-#include "can_converter_can_send.hpp"
-#include "can_converter_can.hpp"
+#include "can_converter_can_send.h"
+#include "can_converter_can.h"
 #include "candef.h"
 
 LOG_MODULE_DECLARE(ccu_can, LOG_LEVEL_INF);
@@ -53,20 +53,20 @@ void send_mcu_analog_drive(const MasterMeasurements *m) {
 
 void send_mcu_analog_pedals(const MasterMeasurements *m) {
     struct candef_mcu_analog_pedals_t frame = {
-        .acceleration_pedal_voltage = candef_mcu_analog_pedals_acceleration_pedal_voltage_encode(m->accelPedalVoltage),
-        .brake_pedal_voltage = candef_mcu_analog_pedals_brake_pedal_voltage_encode(m->brakePedalVoltage),
+        .acceleration_pedal_voltage = candef_mcu_analog_pedals_acceleration_pedal_voltage_encode(m->accel_pedal_voltage),
+        .brake_pedal_voltage = candef_mcu_analog_pedals_brake_pedal_voltage_encode(m->brake_pedal_voltage),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_PEDALS, mcu_analog_pedals, &frame);
 }
 
 void send_mcu_analog_powertrain(const MasterMeasurements *m) {
     struct candef_mcu_analog_powertrain_t frame = {
-        .supercapacitor_voltage = candef_mcu_analog_powertrain_supercapacitor_voltage_encode(m->supercapacitorVoltage),
-        .supercapacitor_current = candef_mcu_analog_powertrain_supercapacitor_current_encode(m->supercapacitorCurrent),
+        .supercapacitor_voltage = candef_mcu_analog_powertrain_supercapacitor_voltage_encode(m->supercapacitor_voltage),
+        .supercapacitor_current = candef_mcu_analog_powertrain_supercapacitor_current_encode(m->supercapacitor_current),
         .motor_controller_supply_current = candef_mcu_analog_powertrain_motor_controller_supply_current_encode(
-            m->motorControllerSupplyCurrent),
+            m->motor_controller_supply_current),
         .motor_controller_supply_voltage = candef_mcu_analog_powertrain_motor_controller_supply_voltage_encode(
-            m->motorControllerSupplyVoltage),
+            m->motor_controller_supply_voltage),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_POWERTRAIN, mcu_analog_powertrain, &frame);
 }
@@ -74,12 +74,12 @@ void send_mcu_analog_powertrain(const MasterMeasurements *m) {
 void send_mcu_analog_fuel_cell(const MasterMeasurements *m) {
     struct candef_mcu_analog_fuel_cell_t frame = {
         .fuel_cell_output_current = candef_mcu_analog_fuel_cell_fuel_cell_output_current_encode(
-            m->fuelCellOutputCurrent),
+            m->fuel_cell_output_current),
         .fuel_cell_output_voltage = candef_mcu_analog_fuel_cell_fuel_cell_output_voltage_encode(
-            m->fuelCellOutputVoltage),
-        .hydrogen_high_pressure = candef_mcu_analog_fuel_cell_hydrogen_high_pressure_encode(m->hydrogenHighPressure),
+            m->fuel_cell_output_voltage),
+        .hydrogen_high_pressure = candef_mcu_analog_fuel_cell_hydrogen_high_pressure_encode(m->hydrogen_high_pressure),
         .hydrogen_leakage_sensor_voltage = candef_mcu_analog_fuel_cell_hydrogen_leakage_sensor_voltage_encode(
-            m->hydrogenLeakageSensorVoltage),
+            m->hydrogen_leakage_sensor_voltage),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_FUEL_CELL, mcu_analog_fuel_cell, &frame);
 }
@@ -87,9 +87,9 @@ void send_mcu_analog_fuel_cell(const MasterMeasurements *m) {
 void send_mcu_analog_accessory(const MasterMeasurements *m) {
     struct candef_mcu_analog_accessory_t frame = {
         .accessory_battery_current = candef_mcu_analog_accessory_accessory_battery_current_encode(
-            m->accessoryBatteryCurrent),
+            m->accessory_battery_current),
         .accessory_battery_voltage = candef_mcu_analog_accessory_accessory_battery_voltage_encode(
-            m->accessoryBatteryVoltage),
+            m->accessory_battery_voltage),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_ACCESSORY, mcu_analog_accessory, &frame);
 }

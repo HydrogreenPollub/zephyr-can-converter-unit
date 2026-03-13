@@ -1,14 +1,12 @@
 identifier: can_converter
-name: Hydrogreen Can converter
+name: Can Converter Unit
+vendor: hydrogreen
 toolchain:
   - zephyr
   - gnuarmemb
 ram: 96
 flash: 512
 supported:
-  - arduino_gpio
-  - arduino_i2c
-  - arduino_spi
   - nvs
   - pwm
   - i2c
@@ -22,4 +20,3 @@ supported:
   - dma
   - can
   - rtc
-vendor: hydrogreen

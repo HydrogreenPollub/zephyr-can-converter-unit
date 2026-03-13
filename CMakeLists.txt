@@ -10,21 +10,25 @@ if(NOT DEFINED BOARD_ROOT)
 endif()
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(app LANGUAGES C CXX)
+project(app LANGUAGES C)
+
+list(APPEND CMAKE_MODULE_PATH ${ZEPHYR_BASE}/modules/nanopb)
+include(nanopb)
+zephyr_nanopb_sources(app proto/master.proto)
 
 target_include_directories(app PRIVATE
         peripherals
         can-definitions
         src
-        hmi_parser
 )
 
 target_sources(app PRIVATE
-        src/main.cpp
-        src/can_converter.cpp
-        src/can_converter_can.cpp
-        src/can_converter_can_send.cpp
-        src/can_converter_rs485.cpp
+        src/main.c
+        src/can_converter.c
+        src/can_converter_can.c
+        src/can_converter_can_send.c
+        src/can_converter_rs485.c
+        src/cobs.c
         peripherals/can.c
         peripherals/gpio.c
         peripherals/adc.c
@@ -34,5 +38,3 @@ target_sources(app PRIVATE
         peripherals/rs485.c
         can-definitions/candef.c
 )
-
-target_compile_features(app PRIVATE cxx_std_17)

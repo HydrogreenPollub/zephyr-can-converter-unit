@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+message MasterMeasurements {
+    float ai1 = 1;
+    float supercapacitor_current = 2;
+    float ai3 = 3;
+    float ai4 = 4;
+    float ai5 = 5;
+    float accel_pedal_voltage = 6;
+    float brake_pedal_voltage = 7;
+    float accessory_battery_current = 8;
+    float hydrogen_high_pressure = 9;
+    float hydrogen_leakage_sensor_voltage = 10;
+    float fuel_cell_output_current = 11;
+    float motor_controller_supply_current = 12;
+    float accessory_battery_voltage = 13;
+    float fuel_cell_output_voltage = 14;
+    float supercapacitor_voltage = 15;
+    float motor_controller_supply_voltage = 16;
+    uint32 din = 17;
+    float rpm = 18;
+    float speed = 19;
+}
+
+message MasterStatus {
+    enum State {
+        IDLE = 0;
+        RUNNING = 1;
+        SHUTDOWN = 2;
+        FAILURE = 3;
+    }
+    uint32 serial_number = 1;
+    State state = 2;
+    bool main_valve_enable_output = 3;
+    bool motor_controller_enable_output = 4;
+    float accel_output_voltage = 5;
+    float brake_output_voltage = 6;
+}
+
+enum ProtiumOperatingState {
+    DISCONNECTED = 0;
+    SYSTEM_OFF = 1;
+    FIRMWARE_VERSION = 2;
+    COMMAND_NOT_FOUND = 3;
+    ENTERING_TO_STARTING_PHASE = 4;
+    ENTERING_TO_RUNNING_PHASE = 5;
+    ANODE_SUPPLY_PRESSURE_CHECK = 6;
+    TEMPERATURE_CHECK = 7;
+    FC_GAS_SYSTEM_CHECK = 8;
+    FC_SEALING_CHECK = 9;
+    FC_VOLTAGE_CHECK = 10;
+    LOW_H2_SUPPLY = 11;
+    SHUTDOWN_INITIATED = 12;
+    ABNORMAL_SHUTDOWN_INITIATED = 13;
+    RUNNING = 14;
+}
+
+message ProtiumValues {
+    float fc_v = 1;
+    float fc_a = 2;
+    float fc_w = 3;
+    float energy = 4;
+    float fct1 = 5;
+    float fan = 6;
+    float h2p1 = 7;
+    float h2p2 = 8;
+    float tank_p = 9;
+    float tank_t = 10;
+    float v_set = 11;
+    float i_set = 12;
+    float ucb_v = 13;
+    float stasis_selector = 14;
+    float stasis_v1 = 15;
+    float stasis_v2 = 16;
+    float number_of_cell = 17;
+    float fct2 = 18;
+    float blw = 19;
+    float batt_v = 20;
+    float ip = 21;
+    float tp = 22;
+}
+
+message ProtiumStateLogEntry {
+    uint32 ms_clock_tick_count = 1;
+    ProtiumOperatingState state = 2;
+}
+
+message ProtiumOperatingStateMsg {
+    ProtiumOperatingState current_state = 1;
+    repeated ProtiumStateLogEntry log_entries = 2;
+}
+
+message MasterFrame {
+    uint32 ms_clock_tick_count = 1;
+    uint32 cycle_clock_tick_count = 2;
+    oneof payload {
+        MasterMeasurements master_measurements = 3;
+        MasterStatus master_status = 4;
+        ProtiumValues protium_values = 5;
+        ProtiumOperatingStateMsg protium_operating_state = 6;
+    }
+}

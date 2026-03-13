@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
-#include "hmi_parser_zephyr.hpp"
+#include "proto/master.pb.h"
 
 typedef struct {
     MasterMeasurements master_measurements;

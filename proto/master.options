@@ -1,0 +1,4 @@
+# NanoPB field options for hmi.proto
+
+# Cap the log entry array to match the existing protocol limit
+ProtiumOperatingStateMsg.log_entries  max_count:8
