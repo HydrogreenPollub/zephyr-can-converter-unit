@@ -35,7 +35,12 @@ jobs:
             tools
             bootloader
             zephyr-can-converter-unit
+            zephyr-lighting-control-unit
+            zephyr-steering-wheel-unit
+            zephyr-fuel-cell-control-unit
           key: zephyr-workspace-${{ runner.os }}-${{ hashFiles('zephyr-manifest/west.yml') }}
+          restore-keys: |
+            zephyr-workspace-${{ runner.os }}-
 
       - name: Initialize and update workspace
         run: |
@@ -46,7 +51,15 @@ jobs:
         run: |
           pip3 install -r zephyr/scripts/requirements.txt
 
+      - name: Cache Zephyr SDK
+        id: cache-sdk
+        uses: actions/cache@v5
+        with:
+          path: ~/zephyr-sdk-0.17.4
+          key: zephyr-sdk-0.17.4-${{ runner.os }}
+
       - name: Install Zephyr SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           wget -q https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
           tar xf zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz -C ~/
@@ -56,7 +69,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/ccache
-          key: ccache-${{ runner.os }}-${{ hashFiles('zephyr-manifest/west.yml') }}
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
 
       - name: Build firmware
         run: |
