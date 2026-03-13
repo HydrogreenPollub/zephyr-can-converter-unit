@@ -76,7 +76,7 @@ void rs485_callback(const struct device *dev, struct uart_event *evt, void *user
     }
 }
 
-static void process_hmi_frame(const uint8_t *buf, size_t len) {
+static void process_master_frame(const uint8_t *buf, size_t len) {
     MasterFrame frame = MasterFrame_init_zero;
     pb_istream_t stream = pb_istream_from_buffer(buf, len);
 
@@ -106,7 +106,7 @@ static void process_hmi_frame(const uint8_t *buf, size_t len) {
             data.protium_operating_state_valid = true;
             break;
         default:
-            LOG_WRN("Unknown HMI payload tag: %d", (int)frame.which_payload);
+            LOG_WRN("Unknown master frame payload tag: %d", (int)frame.which_payload);
             break;
     }
 
@@ -120,7 +120,7 @@ static void process_byte(uint8_t byte) {
             size_t decoded_len = cobs_decode(cobs_frame_buf, cobs_frame_len,
                                              decoded, sizeof(decoded));
             if (decoded_len > 0) {
-                process_hmi_frame(decoded, decoded_len);
+                process_master_frame(decoded, decoded_len);
             } else {
                 LOG_WRN("COBS decode failed (frame_len=%u)", cobs_frame_len);
             }
