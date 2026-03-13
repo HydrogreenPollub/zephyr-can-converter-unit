@@ -1,33 +1,30 @@
-name: Build Zephyr Firmware
+name: Build
 
 on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container: zephyrprojectrtos/ci:v0.28.9
-
+    runs-on: ubuntu-24.04
     steps:
-      - name: Initialize workspace
-        run: |
-          west init -m https://github.com/HydrogreenPollub/zephyr-manifest --mr main .
-          west update
-          west zephyr-export
-          pip3 install -r zephyr/scripts/requirements.txt
-
-      - name: Checkout application
+      - name: Checkout manifest
         uses: actions/checkout@v6
         with:
-          path: zephyr-can-converter-unit
-          clean: true
-          submodules: recursive
+          repository: HydrogreenPollub/zephyr-manifest
+          path: zephyr-manifest
 
-      - name: Build
-        run: |
-          west build -p always -b can_converter zephyr-can-converter-unit
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
-          name: firmware
-          path: build/zephyr/zephyr.bin
+          python-version: 3.13
+
+      - name: Setup Zephyr project
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: zephyr-manifest
+          toolchains: arm-zephyr-eabi
+
+      - name: Build firmware
+        working-directory: zephyr-can-converter-unit
+        shell: bash
+        run: |
+          west build -p always -b can_converter .
