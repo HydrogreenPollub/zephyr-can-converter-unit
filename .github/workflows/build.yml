@@ -28,3 +28,11 @@ jobs:
         shell: bash
         run: |
           west build -p always -b can_converter .
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: firmware-can-converter-unit
+          path: |
+            zephyr-can-converter-unit/build/zephyr/zephyr.bin
+            zephyr-can-converter-unit/build/zephyr/zephyr.elf
