@@ -21,7 +21,6 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-          cache: 'pip'
 
       - name: Install west
         run: |
@@ -36,9 +35,6 @@ jobs:
             tools
             bootloader
             zephyr-can-converter-unit
-            zephyr-lighting-control-unit
-            zephyr-steering-wheel-unit
-            zephyr-fuel-cell-control-unit
           key: zephyr-workspace-${{ runner.os }}-${{ hashFiles('zephyr-manifest/west.yml') }}
 
       - name: Initialize and update workspace
