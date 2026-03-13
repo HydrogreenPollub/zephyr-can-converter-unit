@@ -69,5 +69,5 @@ jobs:
         with:
           name: firmware-can-converter
           path: |
-            zephyr-can-converter-unit/build/zephyr/zephyr.bin
-            zephyr-can-converter-unit/build/zephyr/zephyr.elf
+            build/zephyr/zephyr.bin
+            build/zephyr/zephyr.elf
