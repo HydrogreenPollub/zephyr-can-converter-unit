@@ -1,35 +1,88 @@
-name: Build Zephyr Firmware
+name: Build firmware
 
 on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container: zephyrprojectrtos/ci:latest
-
+    runs-on: ubuntu-24.04
     steps:
-      - name: Initialize workspace
+      - name: Checkout manifest
+        uses: actions/checkout@v6
+        with:
+          repository: HydrogreenPollub/zephyr-manifest
+          path: zephyr-manifest
+
+      - name: Install system dependencies
         run: |
-          west init -m https://github.com/HydrogreenPollub/zephyr-manifest --mr main .
-          west update
-          west zephyr-export
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends ccache ninja-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install west
+        run: |
+          pip3 install west
+
+      - name: Cache Zephyr workspace
+        uses: actions/cache@v5
+        with:
+          path: |
+            zephyr
+            modules
+            tools
+            bootloader
+            zephyr-can-converter-unit
+            zephyr-lighting-control-unit
+            zephyr-steering-wheel-unit
+            zephyr-fuel-cell-control-unit
+          key: zephyr-workspace-${{ runner.os }}-${{ hashFiles('zephyr-manifest/west.yml') }}
+          restore-keys: |
+            zephyr-workspace-${{ runner.os }}-
+
+      - name: Initialize and update workspace
+        run: |
+          west init -l zephyr-manifest
+          west update --narrow -o=--depth=1
+
+      - name: Install Python dependencies
+        run: |
           pip3 install -r zephyr/scripts/requirements.txt
 
-      - name: Checkout application
-        uses: actions/checkout@v4
+      - name: Cache Zephyr SDK
+        id: cache-sdk
+        uses: actions/cache@v5
         with:
-          path: zephyr-can-converter-unit
-          clean: true
-          submodules: recursive
+          path: ~/zephyr-sdk-0.17.4
+          key: zephyr-sdk-0.17.4-${{ runner.os }}
 
-      - name: Build
+      - name: Install Zephyr SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
-          export ZEPHYR_SDK_INSTALL_DIR=/opt/toolchains/zephyr-sdk-${ZSDK_VERSION}
-          export ZEPHYR_TOOLCHAIN_VARIANT=zephyr-gnu
+          wget -q https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz
+          tar xf zephyr-sdk-0.17.4_linux-x86_64_minimal.tar.xz -C ~/
+          ~/zephyr-sdk-0.17.4/setup.sh -c -t arm-zephyr-eabi
+
+      - name: Cache ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Build firmware
+        run: |
+          ccache -z
           west build -p always -b can_converter zephyr-can-converter-unit
+          ccache -sv
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: firmware
-          path: build/zephyr/zephyr.bin
+          name: firmware-can-converter
+          path: |
+            build/zephyr/zephyr.bin
+            build/zephyr/zephyr.elf
