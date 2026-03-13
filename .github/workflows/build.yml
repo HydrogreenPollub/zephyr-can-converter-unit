@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: zephyrprojectrtos/ci:latest
+    container: zephyrprojectrtos/ci:v0.26.13
 
     steps:
       - name: Initialize workspace
@@ -16,7 +16,7 @@ jobs:
           pip3 install -r zephyr/scripts/requirements.txt
 
       - name: Checkout application
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: zephyr-can-converter-unit
           clean: true
@@ -27,7 +27,7 @@ jobs:
           west build -p always -b can_converter zephyr-can-converter-unit
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: firmware
           path: build/zephyr/zephyr.bin
