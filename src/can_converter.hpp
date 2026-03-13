@@ -23,12 +23,10 @@ typedef struct {
 
     ProtiumOperatingState protium_operating_state;
     bool protium_operating_state_valid;
-}master_data_t;
+} master_data_t;
 
 extern master_data_t data;
 extern struct k_mutex data_mutex;
-
-
 
 
 #endif // CAN_CONVERTER_H

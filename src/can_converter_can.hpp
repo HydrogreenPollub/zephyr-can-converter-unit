@@ -16,13 +16,13 @@
 
 typedef struct {
     const struct device *device;
-    struct gpio_dt_spec  tx_led;
-    struct gpio_dt_spec  rx_led;
+    struct gpio_dt_spec tx_led;
+    struct gpio_dt_spec rx_led;
 } ccu_can_t;
 
-extern ccu_can_t          can;
-extern struct can_filter  ccu_can_filter;
-extern struct k_msgq      can_tx_msgq;
+extern ccu_can_t can;
+extern struct can_filter ccu_can_filter;
+extern struct k_msgq can_tx_msgq;
 
 void ccu_can_init();
 

@@ -1,4 +1,3 @@
-
 #include <errno.h>
 #include <string.h>
 #include <zephyr/logging/log.h>
@@ -11,8 +10,7 @@
 
 LOG_MODULE_REGISTER(main);
 
-int main(void)
-{
+int main(void) {
     ccu_can_init();
     ccu_rs485_init();
 

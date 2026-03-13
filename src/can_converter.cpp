@@ -6,6 +6,3 @@
 
 K_MUTEX_DEFINE(data_mutex);
 master_data_t data = {};
-
-
-

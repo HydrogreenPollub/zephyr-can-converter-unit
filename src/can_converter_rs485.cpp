@@ -37,7 +37,6 @@ void rs485_callback(const struct device *dev, struct uart_event *evt, void *user
 
     switch (evt->type) {
         case UART_RX_RDY: {
-
             rs485_packet_t packet = {};
             LOG_HEXDUMP_INF(&evt->data.rx.buf[evt->data.rx.offset], evt->data.rx.len, "RS485 Rx data");
 
@@ -62,13 +61,12 @@ void rs485_callback(const struct device *dev, struct uart_event *evt, void *user
         }
         case UART_TX_DONE: {
             LOG_INF("RS485 TX done");
-            k_sem_give(&tx_done_sem);
+            rs485_on_tx_done();
             break;
         }
         case UART_TX_ABORTED: {
             LOG_INF("RS485 TX aborted");
-            rs485_set_rx(&rs485.dir_pin);
-            k_mutex_unlock(&tx_mutex);
+            rs485_on_tx_aborted(&rs485.dir_pin);
             break;
         }
         default: {
@@ -77,55 +75,51 @@ void rs485_callback(const struct device *dev, struct uart_event *evt, void *user
     }
 }
 
-static void rs485_parser_callbacks_init()
-{
+static void rs485_parser_callbacks_init() {
     parser.onMasterMeasurements =
-    [](uint32_t msClockTickCount, uint32_t cycleClockTickCount, const MasterMeasurements& measurements)
-    {
-        ARG_UNUSED(msClockTickCount);
-        ARG_UNUSED(cycleClockTickCount);
+            [](uint32_t msClockTickCount, uint32_t cycleClockTickCount, const MasterMeasurements &measurements) {
+                ARG_UNUSED(msClockTickCount);
+                ARG_UNUSED(cycleClockTickCount);
 
-        k_mutex_lock(&data_mutex, K_FOREVER);
-        data.master_measurements = measurements;
-        data.master_measurements_valid = true;
-        k_mutex_unlock(&data_mutex);
-    };
+                k_mutex_lock(&data_mutex, K_FOREVER);
+                data.master_measurements = measurements;
+                data.master_measurements_valid = true;
+                k_mutex_unlock(&data_mutex);
+            };
 
     parser.onMasterStatus =
-    [](uint32_t msClockTickCount, uint32_t cycleClockTickCount, const MasterStatus& status)
-    {
-        ARG_UNUSED(msClockTickCount);
-        ARG_UNUSED(cycleClockTickCount);
+            [](uint32_t msClockTickCount, uint32_t cycleClockTickCount, const MasterStatus &status) {
+                ARG_UNUSED(msClockTickCount);
+                ARG_UNUSED(cycleClockTickCount);
 
-        k_mutex_lock(&data_mutex, K_FOREVER);
-        data.master_status = status;
-        data.master_status_valid = true;
-        k_mutex_unlock(&data_mutex);
-    };
+                k_mutex_lock(&data_mutex, K_FOREVER);
+                data.master_status = status;
+                data.master_status_valid = true;
+                k_mutex_unlock(&data_mutex);
+            };
 
     parser.onProtiumValues =
-    [](uint32_t msClockTickCount, uint32_t cycleClockTickCount, const ProtiumValues& values)
-    {
-        ARG_UNUSED(msClockTickCount);
-        ARG_UNUSED(cycleClockTickCount);
+            [](uint32_t msClockTickCount, uint32_t cycleClockTickCount, const ProtiumValues &values) {
+                ARG_UNUSED(msClockTickCount);
+                ARG_UNUSED(cycleClockTickCount);
 
-        k_mutex_lock(&data_mutex, K_FOREVER);
-        data.protium_values = values;
-        data.protium_values_valid = true;
-        k_mutex_unlock(&data_mutex);
-    };
+                k_mutex_lock(&data_mutex, K_FOREVER);
+                data.protium_values = values;
+                data.protium_values_valid = true;
+                k_mutex_unlock(&data_mutex);
+            };
 
     parser.onProtiumOperatingState =
-    [](uint32_t msClockTickCount, uint32_t cycleClockTickCount, ProtiumOperatingState currentOperatingState, const ProtiumOperatingStateLogEntry(&operatingStateLogEntries)[8]) {
+            [](uint32_t msClockTickCount, uint32_t cycleClockTickCount, ProtiumOperatingState currentOperatingState,
+               const ProtiumOperatingStateLogEntry (&operatingStateLogEntries)[8]) {
+                ARG_UNUSED(msClockTickCount);
+                ARG_UNUSED(cycleClockTickCount);
 
-        ARG_UNUSED(msClockTickCount);
-        ARG_UNUSED(cycleClockTickCount);
-
-        k_mutex_lock(&data_mutex, K_FOREVER);
-        data.protium_operating_state = currentOperatingState;
-        data.protium_operating_state_valid = true;
-        k_mutex_unlock(&data_mutex);
-    };
+                k_mutex_lock(&data_mutex, K_FOREVER);
+                data.protium_operating_state = currentOperatingState;
+                data.protium_operating_state_valid = true;
+                k_mutex_unlock(&data_mutex);
+            };
 }
 
 
@@ -144,8 +138,7 @@ static void rs485_parser_callbacks_init()
 //     }
 // }
 
-static void ccu_rs485_parser_thread(void *p1, void *p2, void *p3)
-{
+static void ccu_rs485_parser_thread(void *p1, void *p2, void *p3) {
     rs485_packet_t packet;
 
     while (1) {
@@ -172,12 +165,11 @@ void ccu_rs485_init() {
     //                                  CCU_RS485_TX_THREAD_PRIORITY, 0, K_NO_WAIT);
     // k_thread_name_set(ccu_rs485_tx_thread_tid, "rs485_tx");
 
-    k_tid_t ccu_rs485_parser_thread_tid = k_thread_create(&ccu_rs485_parser_thread_data, ccu_rs485_parser_thread_stack_area,
-                                     K_THREAD_STACK_SIZEOF(ccu_rs485_parser_thread_stack_area),
-                                     ccu_rs485_parser_thread,
-                                     NULL, NULL, NULL,
-                                     CCU_RS485_PARSER_THREAD_PRIORITY, 0, K_NO_WAIT);
+    k_tid_t ccu_rs485_parser_thread_tid = k_thread_create(&ccu_rs485_parser_thread_data,
+                                                          ccu_rs485_parser_thread_stack_area,
+                                                          K_THREAD_STACK_SIZEOF(ccu_rs485_parser_thread_stack_area),
+                                                          ccu_rs485_parser_thread,
+                                                          NULL, NULL, NULL,
+                                                          CCU_RS485_PARSER_THREAD_PRIORITY, 0, K_NO_WAIT);
     k_thread_name_set(ccu_rs485_parser_thread_tid, "rs485_parser");
-
-
 }

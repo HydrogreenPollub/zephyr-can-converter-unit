@@ -23,6 +23,7 @@ target_sources(app PRIVATE
         src/main.cpp
         src/can_converter.cpp
         src/can_converter_can.cpp
+        src/can_converter_can_send.cpp
         src/can_converter_rs485.cpp
         peripherals/can.c
         peripherals/gpio.c

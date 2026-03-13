@@ -6,6 +6,7 @@
 #define RS485_H
 #ifdef __cplusplus
 extern "C" {
+
 #endif
 
 #include <stdio.h>
@@ -15,13 +16,17 @@ extern "C" {
 
 #define RS485_RX_BUF_SIZE 256
 
-extern struct k_mutex tx_mutex;
-extern struct k_sem tx_done_sem;
+int rs485_init(const struct device *dev, struct gpio_dt_spec *dir);
 
-int rs485_init(const struct device* dev, struct gpio_dt_spec *dir);
-int rs485_send(const struct device* dev, struct gpio_dt_spec *dir, const uint8_t *data, size_t len);
+int rs485_send(const struct device *dev, struct gpio_dt_spec *dir, const uint8_t *data, size_t len);
+
 int rs485_set_tx(struct gpio_dt_spec *gpio);
+
 int rs485_set_rx(struct gpio_dt_spec *gpio);
+
+void rs485_on_tx_done(void);
+
+void rs485_on_tx_aborted(struct gpio_dt_spec *dir);
 
 #ifdef __cplusplus
 }

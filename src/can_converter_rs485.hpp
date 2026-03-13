@@ -24,12 +24,12 @@ typedef struct {
     struct gpio_dt_spec rx_led;
     uint8_t rx_buf[RS485_RX_BUF_SIZE];
     uint8_t rx_buf_next[RS485_RX_BUF_SIZE];
-}ccu_rs485_t;
+} ccu_rs485_t;
 
 typedef struct {
     uint8_t data[64];
     uint8_t len;
-}rs485_packet_t;
+} rs485_packet_t;
 
 
 extern master_data_t data;
