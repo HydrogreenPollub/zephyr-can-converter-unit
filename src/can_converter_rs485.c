@@ -9,13 +9,16 @@
 
 LOG_MODULE_REGISTER(ccu_rs485, LOG_LEVEL_INF);
 
-#define CCU_RS485_PARSER_THREAD_STACK_SIZE 1024
+#define CCU_RS485_PARSER_THREAD_STACK_SIZE 2048
 #define CCU_RS485_PARSER_THREAD_PRIORITY   5
 
 K_THREAD_STACK_DEFINE(ccu_rs485_parser_thread_stack_area, CCU_RS485_PARSER_THREAD_STACK_SIZE);
 struct k_thread ccu_rs485_parser_thread_data;
 
 K_MSGQ_DEFINE(rs485_rx_msgq, sizeof(rs485_packet_t), 16, 4);
+
+static struct k_work_delayable rx_led_off_work;
+static struct k_work_delayable tx_led_off_work;
 
 /* COBS frame accumulation state (used only in the parser thread) */
 #define COBS_FRAME_BUF_SIZE 256
@@ -32,6 +35,11 @@ ccu_rs485_t rs485 = {
     .rx_buf_next = {0},
 };
 
+static void rx_led_off_handler(struct k_work *work) { gpio_reset(&rs485.rx_led); }
+static void tx_led_off_handler(struct k_work *work) { gpio_reset(&rs485.tx_led); }
+
+static uint8_t *rs485_free_buf;
+
 void rs485_callback(const struct device *dev, struct uart_event *evt, void *user_data) {
     ARG_UNUSED(dev);
     ARG_UNUSED(user_data);
@@ -47,23 +55,29 @@ void rs485_callback(const struct device *dev, struct uart_event *evt, void *user
             if (k_msgq_put(&rs485_rx_msgq, &packet, K_NO_WAIT) != 0) {
                 LOG_WRN("RS485 RX queue full");
             }
+
+            gpio_set(&rs485.rx_led);
+            k_work_reschedule(&rx_led_off_work, K_MSEC(50));
             break;
         }
         case UART_RX_BUF_REQUEST: {
-            uart_rx_buf_rsp(rs485.device, rs485.rx_buf_next, sizeof(rs485.rx_buf_next));
+            uart_rx_buf_rsp(rs485.device, rs485_free_buf, sizeof(rs485.rx_buf));
+            break;
+        }
+        case UART_RX_BUF_RELEASED: {
+            rs485_free_buf = evt->data.rx_buf.buf;
             break;
         }
         case UART_RX_DISABLED: {
-            LOG_INF("RS485 RX disabled");
-            int ret = uart_rx_enable(rs485.device, rs485.rx_buf, sizeof(rs485.rx_buf), 100);
-            if (!ret) {
-                LOG_INF("RS485 RX reconfigured");
-            }
+            LOG_WRN("RS485 RX disabled — restarting");
+            uart_rx_enable(rs485.device, rs485_free_buf, sizeof(rs485.rx_buf), 100);
             break;
         }
         case UART_TX_DONE: {
             LOG_INF("RS485 TX done");
             rs485_on_tx_done();
+            gpio_set(&rs485.tx_led);
+            k_work_reschedule(&tx_led_off_work, K_MSEC(50));
             break;
         }
         case UART_TX_ABORTED: {
@@ -159,9 +173,12 @@ static void ccu_rs485_parser_thread(void *p1, void *p2, void *p3) {
 void ccu_rs485_init() {
     gpio_init(&rs485.rx_led, GPIO_OUTPUT_INACTIVE);
     gpio_init(&rs485.tx_led, GPIO_OUTPUT_INACTIVE);
+    k_work_init_delayable(&rx_led_off_work, rx_led_off_handler);
+    k_work_init_delayable(&tx_led_off_work, tx_led_off_handler);
+    rs485_free_buf = rs485.rx_buf_next;
     rs485_init(rs485.device, &rs485.dir_pin);
     uart_callback_set_(rs485.device, rs485_callback);
-    uart_rx_init(rs485.device, rs485.rx_buf, sizeof(rs485.rx_buf), 100);
+    uart_rx_init(rs485.device, rs485.rx_buf, sizeof(rs485.rx_buf), 5000);
 
     k_tid_t tid = k_thread_create(&ccu_rs485_parser_thread_data,
                                   ccu_rs485_parser_thread_stack_area,

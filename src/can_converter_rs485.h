@@ -24,8 +24,8 @@ typedef struct {
 } ccu_rs485_t;
 
 typedef struct {
-    uint8_t data[64];
-    uint8_t len;
+    uint8_t data[RS485_RX_BUF_SIZE];
+    size_t len;
 } rs485_packet_t;
 
 

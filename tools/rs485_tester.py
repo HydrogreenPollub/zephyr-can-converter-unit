@@ -3,10 +3,10 @@ This module provides utility functions and an interactive prompt to encode and s
 
 Functions:
     cobs_encode(data: bytes) -> bytes: Encodes data using the Consistent Overhead Byte Stuffing (COBS) algorithm.
-    create_master_measurements_frame() -> bytes: Constructs a serialized MasterFrame containing MasterMeasurements.
-    create_master_status_frame() -> bytes: Constructs a serialized MasterFrame containing MasterStatus.
-    create_protium_operating_state_frame() -> bytes: Constructs a serialized MasterFrame containing a ProtiumOperatingStateMsg.
-    create_protium_values_frame() -> bytes: Constructs a serialized MasterFrame containing ProtiumValues.
+    create_master_measurements_frame() -> bytes: Constructs a serialized MasterFrame containing randomized MasterMeasurements.
+    create_master_status_frame() -> bytes: Constructs a serialized MasterFrame containing randomized MasterStatus.
+    create_protium_operating_state_frame() -> bytes: Constructs a serialized MasterFrame containing a randomized ProtiumOperatingStateMsg.
+    create_protium_values_frame() -> bytes: Constructs a serialized MasterFrame containing randomized ProtiumValues.
     send_frame(port: serial.Serial, encoded_data: bytes) -> None: Transmits the COBS-encoded frame over the provided serial port.
     run_automated_mode(port: serial.Serial) -> None: Executes the automated transmission mode, sending frames at predefined intervals.
     main() -> None: Main execution loop to monitor keyboard input and trigger serial transmission.
@@ -14,6 +14,7 @@ Functions:
 
 import serial
 import time
+import random
 import master_pb2
 
 def cobs_encode(data: bytes) -> bytes:
@@ -51,77 +52,82 @@ def cobs_encode(data: bytes) -> bytes:
 
 def create_master_measurements_frame() -> bytes:
     """
-    Constructs a serialized MasterFrame containing MasterMeasurements.
+    Constructs a serialized MasterFrame containing randomized MasterMeasurements.
 
     Returns:
         bytes: The serialized Protocol Buffers payload.
     """
     frame = master_pb2.MasterFrame()
-    frame.ms_clock_tick_count = 1000
-    frame.cycle_clock_tick_count = 10
+    frame.ms_clock_tick_count = int(time.perf_counter() * 1000) % 0xFFFFFFFF
+    frame.cycle_clock_tick_count = random.randint(0, 1000)
 
     meas = master_pb2.MasterMeasurements()
-    meas.speed = 45.5
-    meas.rpm = 3000.0
-    meas.supercapacitor_voltage = 48.2
+    meas.speed = random.uniform(0.0, 120.0)
+    meas.rpm = random.uniform(0.0, 8000.0)
+    meas.supercapacitor_voltage = random.uniform(40.0, 50.0)
 
     frame.master_measurements.CopyFrom(meas)
     return frame.SerializeToString()
 
 def create_master_status_frame() -> bytes:
     """
-    Constructs a serialized MasterFrame containing MasterStatus.
+    Constructs a serialized MasterFrame containing randomized MasterStatus.
 
     Returns:
         bytes: The serialized Protocol Buffers payload.
     """
     frame = master_pb2.MasterFrame()
-    frame.ms_clock_tick_count = 2000
-    frame.cycle_clock_tick_count = 20
+    frame.ms_clock_tick_count = int(time.perf_counter() * 1000) % 0xFFFFFFFF
+    frame.cycle_clock_tick_count = random.randint(0, 1000)
 
     status = master_pb2.MasterStatus()
     status.serial_number = 123456
-    status.state = master_pb2.MasterStatus.RUNNING
+    status.state = random.choice([
+        master_pb2.MasterStatus.IDLE,
+        master_pb2.MasterStatus.RUNNING,
+        master_pb2.MasterStatus.SHUTDOWN,
+        master_pb2.MasterStatus.FAILURE
+    ])
 
     frame.master_status.CopyFrom(status)
     return frame.SerializeToString()
 
 def create_protium_operating_state_frame() -> bytes:
     """
-    Constructs a serialized MasterFrame containing a ProtiumOperatingStateMsg.
+    Constructs a serialized MasterFrame containing a randomized ProtiumOperatingStateMsg.
 
     Returns:
         bytes: The serialized Protocol Buffers payload.
     """
     frame = master_pb2.MasterFrame()
-    frame.ms_clock_tick_count = 12345
-    frame.cycle_clock_tick_count = 678
+    frame.ms_clock_tick_count = int(time.perf_counter() * 1000) % 0xFFFFFFFF
+    frame.cycle_clock_tick_count = random.randint(0, 1000)
 
     protium_msg = master_pb2.ProtiumOperatingStateMsg()
-    protium_msg.current_state = master_pb2.RUNNING
+    protium_msg.current_state = random.randint(0, 14)
 
     entry = protium_msg.log_entries.add()
-    entry.ms_clock_tick_count = 12000
-    entry.state = master_pb2.ENTERING_TO_RUNNING_PHASE
+    entry.ms_clock_tick_count = frame.ms_clock_tick_count - random.randint(100, 500)
+    entry.state = random.randint(0, 14)
 
     frame.protium_operating_state.CopyFrom(protium_msg)
     return frame.SerializeToString()
 
 def create_protium_values_frame() -> bytes:
     """
-    Constructs a serialized MasterFrame containing ProtiumValues.
+    Constructs a serialized MasterFrame containing randomized ProtiumValues.
 
     Returns:
         bytes: The serialized Protocol Buffers payload.
     """
     frame = master_pb2.MasterFrame()
-    frame.ms_clock_tick_count = 4000
-    frame.cycle_clock_tick_count = 40
+    frame.ms_clock_tick_count = int(time.perf_counter() * 1000) % 0xFFFFFFFF
+    frame.cycle_clock_tick_count = random.randint(0, 1000)
 
     vals = master_pb2.ProtiumValues()
-    vals.fc_v = 50.0
-    vals.fc_a = 10.5
-    vals.energy = 500.0
+    vals.fc_v = random.uniform(45.0, 55.0)
+    vals.fc_a = random.uniform(0.0, 20.0)
+    vals.energy = random.uniform(100.0, 1000.0)
 
     frame.protium_values.CopyFrom(vals)
     return frame.SerializeToString()
@@ -137,7 +143,7 @@ def send_frame(port: serial.Serial, encoded_data: bytes) -> None:
     Returns:
         None
     """
-    port.write(encoded_data + b'\x00')
+    port.write(encoded_data + b'\x00\x00')
 
 def run_automated_mode(port: serial.Serial) -> None:
     """
