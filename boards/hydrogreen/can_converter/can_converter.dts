@@ -7,7 +7,7 @@
 // https://www.st.com/resource/en/reference_manual/dm00355726-stm32g4-series-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
 
 / {
-	model = "Hydrogreen Can converter board";
+	model = "Hydrogreen CAN converter board";
 	compatible = "hydrogreen,can-converter";
 
 

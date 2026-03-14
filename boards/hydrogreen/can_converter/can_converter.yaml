@@ -1,5 +1,5 @@
 identifier: can_converter
-name: Can Converter Unit
+name: CAN Converter Unit
 vendor: hydrogreen
 toolchain:
   - zephyr
