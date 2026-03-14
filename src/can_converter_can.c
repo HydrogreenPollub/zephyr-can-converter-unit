@@ -20,6 +20,7 @@ K_MSGQ_DEFINE(can_tx_msgq, sizeof(struct can_frame), 32, 4);
 
 static volatile int can_tx_result;
 static struct k_work_delayable tx_led_off_work;
+static struct k_work_delayable bus_off_recovery_work;
 
 struct can_filter ccu_can_filter = {
     .id = CANDEF_MCU_TIME_SYNC_FRAME_ID,
@@ -37,6 +38,32 @@ static void ccu_can_tx_callback(const struct device *dev, int error, void *user_
 
 static void tx_led_off_handler(struct k_work *work) {
     gpio_reset(&can.tx_led);
+}
+
+static void bus_off_recovery_handler(struct k_work *work) {
+    int ret = can_recover(can.device, K_MSEC(100));
+    if (ret != 0 && ret != -ENOTSUP) {
+        LOG_WRN("CAN recovery failed (%d), retrying in 1s", ret);
+        k_work_reschedule(&bus_off_recovery_work, K_SECONDS(1));
+    } else {
+        LOG_INF("CAN bus recovered");
+    }
+}
+
+static void can_state_change_cb(const struct device *dev,
+                                enum can_state state,
+                                struct can_bus_err_cnt err_cnt,
+                                void *user_data) {
+    ARG_UNUSED(dev);
+    ARG_UNUSED(user_data);
+
+    LOG_WRN("CAN state: %d (tx_err=%d rx_err=%d)",
+            state, err_cnt.tx_err_cnt, err_cnt.rx_err_cnt);
+
+    if (state == CAN_STATE_BUS_OFF) {
+        k_msgq_purge(&can_tx_msgq);
+        k_work_reschedule(&bus_off_recovery_work, K_MSEC(100));
+    }
 }
 
 static void ccu_can_tx_thread(void *p1, void *p2, void *p3) {
@@ -126,6 +153,8 @@ void ccu_can_init(void) {
     gpio_init(&can.rx_led, GPIO_OUTPUT_INACTIVE);
     gpio_init(&can.tx_led, GPIO_OUTPUT_INACTIVE);
     k_work_init_delayable(&tx_led_off_work, tx_led_off_handler);
+    k_work_init_delayable(&bus_off_recovery_work, bus_off_recovery_handler);
+    can_set_state_change_callback(can.device, can_state_change_cb, NULL);
 
     k_tid_t tx_tid = k_thread_create(
         &ccu_can_tx_thread_data, ccu_can_tx_thread_stack_area,
