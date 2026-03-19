@@ -16,9 +16,12 @@ master_data_t data = {0};
 static void on_test_button(void) {
     LOG_INF("Test button pressed — lighting all LEDs, sending all frames");
     status_led_set_override(true);
-    ccu_can_test();
-    ccu_rs485_test();
+    ccu_can_test_set(true);
+    ccu_rs485_test_set(true);
+    ccu_can_test_send_all();
     k_sleep(K_SECONDS(2));
+    ccu_can_test_set(false);
+    ccu_rs485_test_set(false);
     status_led_set_override(false);
     LOG_INF("Test button: done");
 }

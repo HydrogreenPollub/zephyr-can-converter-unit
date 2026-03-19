@@ -30,6 +30,6 @@ typedef struct {
 
 
 void ccu_rs485_init(void);
-void ccu_rs485_test(void);
+void ccu_rs485_test_set(bool active);
 
 #endif //CAN_CONVERTER_RS485_H

@@ -21,10 +21,10 @@ K_SEM_DEFINE(can_tx_done_sem, 0, 1);
 K_MSGQ_DEFINE(can_tx_msgq, sizeof(struct can_frame), 32, 4);
 
 static volatile int can_tx_result;
+static volatile bool test_active;
 static struct k_work_delayable tx_led_off_work;
 static struct k_work_delayable rx_led_off_work;
 static struct k_work_delayable bus_off_recovery_work;
-static struct k_work_delayable can_test_leds_off_work;
 
 struct can_filter ccu_can_filter = {
     .id = CANDEF_MCU_TIME_SYNC_FRAME_ID,
@@ -40,18 +40,8 @@ ccu_can_t can = {
 
 static void ccu_can_tx_callback(const struct device *dev, int error, void *user_data);
 
-static void tx_led_off_handler(struct k_work *work) {
-    gpio_reset(&can.tx_led);
-}
-
-static void rx_led_off_handler(struct k_work *work) {
-    gpio_reset(&can.rx_led);
-}
-
-static void can_test_leds_off_handler(struct k_work *work) {
-    gpio_reset(&can.rx_led);
-    gpio_reset(&can.tx_led);
-}
+static void tx_led_off_handler(struct k_work *work) { if (!test_active) gpio_reset(&can.tx_led); }
+static void rx_led_off_handler(struct k_work *work) { if (!test_active) gpio_reset(&can.rx_led); }
 
 static void bus_off_recovery_handler(struct k_work *work) {
     int ret = can_recover(can.device, K_MSEC(100));
@@ -207,13 +197,18 @@ static const struct can_filter dfu_filter = {
     .flags = CAN_FRAME_IDE,
 };
 
-void ccu_can_test(void) {
-    /* Light both CAN LEDs for 2 s */
-    gpio_set(&can.rx_led);
-    gpio_set(&can.tx_led);
-    k_work_reschedule(&can_test_leds_off_work, K_SECONDS(2));
+void ccu_can_test_set(bool active) {
+    test_active = active;
+    if (active) {
+        gpio_set(&can.rx_led);
+        gpio_set(&can.tx_led);
+    } else {
+        gpio_reset(&can.rx_led);
+        gpio_reset(&can.tx_led);
+    }
+}
 
-    /* Immediately send all periodic telemetry frames */
+void ccu_can_test_send_all(void) {
     master_data_t d = {0};
     k_mutex_lock(&data_mutex, K_FOREVER);
     d = data;
@@ -231,7 +226,7 @@ void ccu_can_test(void) {
         send_protium_state(d.protium_operating_state);
     }
 
-    LOG_INF("CAN test: LEDs on, all frames enqueued");
+    LOG_INF("CAN test: all frames enqueued");
 }
 
 void ccu_can_init(void) {
@@ -241,7 +236,6 @@ void ccu_can_init(void) {
     k_work_init_delayable(&tx_led_off_work, tx_led_off_handler);
     k_work_init_delayable(&rx_led_off_work, rx_led_off_handler);
     k_work_init_delayable(&bus_off_recovery_work, bus_off_recovery_handler);
-    k_work_init_delayable(&can_test_leds_off_work, can_test_leds_off_handler);
     can_set_state_change_callback(can.device, can_state_change_cb, NULL);
 
     can_add_rx_filter_(can.device, ccu_dfu_rx_cb, &dfu_filter);

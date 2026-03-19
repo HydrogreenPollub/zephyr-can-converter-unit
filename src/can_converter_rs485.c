@@ -35,8 +35,10 @@ ccu_rs485_t rs485 = {
     .rx_buf_next = {0},
 };
 
-static void rx_led_off_handler(struct k_work *work) { gpio_reset(&rs485.rx_led); }
-static void tx_led_off_handler(struct k_work *work) { gpio_reset(&rs485.tx_led); }
+static volatile bool test_active;
+
+static void rx_led_off_handler(struct k_work *work) { if (!test_active) gpio_reset(&rs485.rx_led); }
+static void tx_led_off_handler(struct k_work *work) { if (!test_active) gpio_reset(&rs485.tx_led); }
 
 static uint8_t *rs485_free_buf;
 
@@ -170,12 +172,15 @@ static void ccu_rs485_parser_thread(void *p1, void *p2, void *p3) {
     }
 }
 
-void ccu_rs485_test(void) {
-    gpio_set(&rs485.rx_led);
-    gpio_set(&rs485.tx_led);
-    k_work_reschedule(&rx_led_off_work, K_SECONDS(2));
-    k_work_reschedule(&tx_led_off_work, K_SECONDS(2));
-    LOG_INF("RS485 test: LEDs on");
+void ccu_rs485_test_set(bool active) {
+    test_active = active;
+    if (active) {
+        gpio_set(&rs485.rx_led);
+        gpio_set(&rs485.tx_led);
+    } else {
+        gpio_reset(&rs485.rx_led);
+        gpio_reset(&rs485.tx_led);
+    }
 }
 
 void ccu_rs485_init(void) {
