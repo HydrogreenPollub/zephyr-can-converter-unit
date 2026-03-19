@@ -22,19 +22,40 @@ target_include_directories(app PRIVATE
         src
 )
 
+if(CONFIG_BOOTLOADER_MCUBOOT)
+    set(SIGNED_BIN  ${CMAKE_BINARY_DIR}/zephyr/zephyr.signed.bin)
+    set(ELF_FILE    ${CMAKE_BINARY_DIR}/zephyr/zephyr.elf)
+    set(HEADER_BIN  ${CMAKE_BINARY_DIR}/zephyr/mcuboot_header.bin)
+
+    add_custom_target(patch_elf_mcuboot_header ALL
+        COMMAND ${PYTHON_EXECUTABLE} -c
+            "h=open('${SIGNED_BIN}','rb').read(${CONFIG_ROM_START_OFFSET}); open('${HEADER_BIN}','wb').write(h)"
+        COMMAND ${PYTHON_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/patch_elf_mcuboot_header.py
+            ${ELF_FILE} ${HEADER_BIN} ${CONFIG_ROM_START_OFFSET}
+        COMMENT "Patching MCUboot image header into zephyr.elf for GDB"
+        VERBATIM
+    )
+    add_dependencies(patch_elf_mcuboot_header zephyr_final)
+endif()
+
 target_sources(app PRIVATE
         src/main.c
         src/can_converter.c
         src/can_converter_can.c
         src/can_converter_can_send.c
         src/can_converter_rs485.c
+        src/can_converter_dfu.c
         src/cobs.c
         peripherals/can.c
+        peripherals/can_dfu.c
         peripherals/gpio.c
         peripherals/adc.c
         peripherals/pwm.c
         peripherals/counter.c
         peripherals/uart.c
         peripherals/rs485.c
+        peripherals/status_led.c
+        peripherals/test_button.c
         can-definitions/candef.c
 )

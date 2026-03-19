@@ -175,6 +175,7 @@ stm32_lp_tick_source: &lptim1 {
 };
 
 &flash0 {
+	erase-block-size = <2048>;
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
@@ -182,11 +183,11 @@ stm32_lp_tick_source: &lptim1 {
 
 		boot_partition: partition@0 {
 			label = "mcuboot";
-			reg = <0x00000000 DT_SIZE_K(34)>;
+			reg = <0x00000000 DT_SIZE_K(40)>;
 		};
-		slot0_partition: partition@8800 {
+		slot0_partition: partition@a000 {
 			label = "image-0";
-			reg = <0x00008800 DT_SIZE_K(240)>;
+			reg = <0x0000a000 DT_SIZE_K(234)>;
 		};
 		slot1_partition: partition@44800 {
 			label = "image-1";
