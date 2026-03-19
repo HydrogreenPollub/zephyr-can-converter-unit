@@ -139,10 +139,6 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
         d = data;
         k_mutex_unlock(&data_mutex);
 
-        if (d.master_measurements_valid) {
-            send_mcu_analog_drive(&d.master_measurements);
-        }
-
         cnt_100ms++;
         cnt_1000ms++;
 
@@ -159,6 +155,7 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
         if (cnt_100ms >= 10) {
             cnt_100ms = 0;
 
+            send_mcu_analog_drive(&d.master_measurements);
             send_mcu_analog_pedals(&d.master_measurements);
             send_mcu_analog_powertrain(&d.master_measurements);
             send_mcu_analog_fuel_cell(&d.master_measurements);
