@@ -28,5 +28,8 @@ typedef struct {
 extern master_data_t data;
 extern struct k_mutex data_mutex;
 
+/* Board-specific initialisation: status LED, test button, CAN status broadcast.
+ * Called from main() after all subsystems are up. */
+void ccu_board_init(void);
 
 #endif // CAN_CONVERTER_H

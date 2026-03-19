@@ -24,6 +24,7 @@ extern ccu_can_t can;
 extern struct can_filter ccu_can_filter;
 extern struct k_msgq can_tx_msgq;
 
-void ccu_can_init();
+void ccu_can_init(void);
+void ccu_can_test(void);
 
 #endif //CAN_CONVERTER_CAN_H

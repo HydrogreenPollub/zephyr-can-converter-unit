@@ -1,5 +1,7 @@
 #include "can_converter_can.h"
 #include "can_converter_can_send.h"
+#include "can_converter_dfu.h"
+#include "status_led.h"
 #include "candef.h"
 
 LOG_MODULE_REGISTER(ccu_can, LOG_LEVEL_INF);
@@ -20,7 +22,9 @@ K_MSGQ_DEFINE(can_tx_msgq, sizeof(struct can_frame), 32, 4);
 
 static volatile int can_tx_result;
 static struct k_work_delayable tx_led_off_work;
+static struct k_work_delayable rx_led_off_work;
 static struct k_work_delayable bus_off_recovery_work;
+static struct k_work_delayable can_test_leds_off_work;
 
 struct can_filter ccu_can_filter = {
     .id = CANDEF_MCU_TIME_SYNC_FRAME_ID,
@@ -40,6 +44,15 @@ static void tx_led_off_handler(struct k_work *work) {
     gpio_reset(&can.tx_led);
 }
 
+static void rx_led_off_handler(struct k_work *work) {
+    gpio_reset(&can.rx_led);
+}
+
+static void can_test_leds_off_handler(struct k_work *work) {
+    gpio_reset(&can.rx_led);
+    gpio_reset(&can.tx_led);
+}
+
 static void bus_off_recovery_handler(struct k_work *work) {
     int ret = can_recover(can.device, K_MSEC(100));
     if (ret != 0 && ret != -ENOTSUP) {
@@ -47,6 +60,7 @@ static void bus_off_recovery_handler(struct k_work *work) {
         k_work_reschedule(&bus_off_recovery_work, K_SECONDS(1));
     } else {
         LOG_INF("CAN bus recovered");
+        status_led_set(STATUS_LED_OPERATIONAL);
     }
 }
 
@@ -60,9 +74,21 @@ static void can_state_change_cb(const struct device *dev,
     LOG_WRN("CAN state: %d (tx_err=%d rx_err=%d)",
             state, err_cnt.tx_err_cnt, err_cnt.rx_err_cnt);
 
-    if (state == CAN_STATE_BUS_OFF) {
+    switch (state) {
+    case CAN_STATE_ERROR_ACTIVE:
+        status_led_set(STATUS_LED_OPERATIONAL);
+        break;
+    case CAN_STATE_ERROR_WARNING:
+    case CAN_STATE_ERROR_PASSIVE:
+        status_led_set(STATUS_LED_WARNING);
+        break;
+    case CAN_STATE_BUS_OFF:
+        status_led_set(STATUS_LED_BUS_OFF);
         k_msgq_purge(&can_tx_msgq);
         k_work_reschedule(&bus_off_recovery_work, K_MSEC(100));
+        break;
+    default:
+        break;
     }
 }
 
@@ -97,11 +123,16 @@ static void ccu_can_tx_thread(void *p1, void *p2, void *p3) {
 static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
     uint8_t cnt_100ms = 0;
     uint8_t cnt_1000ms = 0;
-    uint16_t fake_tick = 0;
-    float fake_accel = 0.0f;
-
     while (1) {
         k_sleep(K_MSEC(10));
+
+        /* Suspend all periodic TX during DFU — reduces bus contention so the
+         * device only participates as a receiver + ACK node. */
+        if (can_dfu_is_active()) {
+            cnt_100ms  = 0;
+            cnt_1000ms = 0;
+            continue;
+        }
 
         master_data_t d = {0};
         k_mutex_lock(&data_mutex, K_FOREVER);
@@ -118,8 +149,7 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
         if (cnt_1000ms >= 100) {
             cnt_1000ms = 0;
 
-            fake_accel = (float) (fake_tick % 100);
-            fake_tick++;
+            send_mcu_faults();
 
             if (d.protium_operating_state_valid) {
                 send_protium_state(d.protium_operating_state);
@@ -128,10 +158,6 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
 
         if (cnt_100ms >= 10) {
             cnt_100ms = 0;
-
-            d.master_measurements.fuel_cell_output_voltage = 21.0f;
-            d.master_measurements.supercapacitor_voltage = 37.0f;
-            d.master_measurements.accel_pedal_voltage = fake_accel;
 
             send_mcu_analog_pedals(&d.master_measurements);
             send_mcu_analog_powertrain(&d.master_measurements);
@@ -148,13 +174,81 @@ static void ccu_can_tx_callback(const struct device *dev, int error, void *user_
     k_sem_give(&can_tx_done_sem);
 }
 
+static void ccu_dfu_rx_cb(const struct device *dev, struct can_frame *frame, void *user_data) {
+    ARG_UNUSED(dev);
+    ARG_UNUSED(user_data);
+
+    /* Log CMD frames (REQUEST/COMMIT) at INF — always visible.
+     * Log DATA frames at DBG — enable ccu_can DBG level to see them.
+     * Logging every DATA frame at INF would generate ~500 log/s during DFU
+     * and overwhelm the RTT buffer even in DROP mode. */
+    if (frame->id == CCU_DFU_CMD_ID) {
+        LOG_INF("CAN RX CMD id=0x%03X dlc=%u data=%02X %02X %02X %02X %02X",
+                frame->id, frame->dlc,
+                frame->dlc > 0 ? frame->data[0] : 0,
+                frame->dlc > 1 ? frame->data[1] : 0,
+                frame->dlc > 2 ? frame->data[2] : 0,
+                frame->dlc > 3 ? frame->data[3] : 0,
+                frame->dlc > 4 ? frame->data[4] : 0);
+    } else {
+        LOG_DBG("CAN RX DATA id=0x%03X dlc=%u seq=%u",
+                frame->id, frame->dlc,
+                frame->dlc >= 2 ? (uint16_t)(frame->data[0] | (frame->data[1] << 8)) : 0);
+    }
+
+    /* Flash CAN RX LED */
+    gpio_set(&can.rx_led);
+    k_work_reschedule(&rx_led_off_work, K_MSEC(50));
+
+    can_dfu_on_frame(frame);
+}
+
+/* Single filter matches both 0x7E0 (CMD) and 0x7E1 (DATA) — both land on FIFO0 */
+static const struct can_filter dfu_filter = {
+    .id    = CCU_DFU_CMD_ID,
+    .mask  = 0x1FFFFFFEU,
+    .flags = CAN_FRAME_IDE,
+};
+
+void ccu_can_test(void) {
+    /* Light both CAN LEDs for 2 s */
+    gpio_set(&can.rx_led);
+    gpio_set(&can.tx_led);
+    k_work_reschedule(&can_test_leds_off_work, K_SECONDS(2));
+
+    /* Immediately send all periodic telemetry frames */
+    master_data_t d = {0};
+    k_mutex_lock(&data_mutex, K_FOREVER);
+    d = data;
+    k_mutex_unlock(&data_mutex);
+
+    send_mcu_analog_drive(&d.master_measurements);
+    send_mcu_analog_pedals(&d.master_measurements);
+    send_mcu_analog_powertrain(&d.master_measurements);
+    send_mcu_analog_fuel_cell(&d.master_measurements);
+    send_mcu_analog_accessory(&d.master_measurements);
+    send_mcu_inputs(&d.master_measurements);
+    send_mcu_state(&d.master_status);
+    send_mcu_faults();
+    if (d.protium_operating_state_valid) {
+        send_protium_state(d.protium_operating_state);
+    }
+
+    LOG_INF("CAN test: LEDs on, all frames enqueued");
+}
+
 void ccu_can_init(void) {
     can_init(can.device, HYDROGREEN_CAN_BAUD_RATE);
     gpio_init(&can.rx_led, GPIO_OUTPUT_INACTIVE);
     gpio_init(&can.tx_led, GPIO_OUTPUT_INACTIVE);
     k_work_init_delayable(&tx_led_off_work, tx_led_off_handler);
+    k_work_init_delayable(&rx_led_off_work, rx_led_off_handler);
     k_work_init_delayable(&bus_off_recovery_work, bus_off_recovery_handler);
+    k_work_init_delayable(&can_test_leds_off_work, can_test_leds_off_handler);
     can_set_state_change_callback(can.device, can_state_change_cb, NULL);
+
+    can_add_rx_filter_(can.device, ccu_dfu_rx_cb, &dfu_filter);
+    ccu_dfu_init();
 
     k_tid_t tx_tid = k_thread_create(
         &ccu_can_tx_thread_data, ccu_can_tx_thread_stack_area,

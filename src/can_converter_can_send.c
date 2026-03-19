@@ -94,6 +94,11 @@ void send_mcu_analog_accessory(const MasterMeasurements *m) {
     PACK_AND_ENQUEUE(MCU_ANALOG_ACCESSORY, mcu_analog_accessory, &frame);
 }
 
+void send_mcu_faults(void) {
+    struct candef_mcu_faults_t frame = {0};
+    PACK_AND_ENQUEUE(MCU_FAULTS, mcu_faults, &frame);
+}
+
 void send_protium_state(ProtiumOperatingState operating_state) {
     struct candef_protium_state_t frame = {
         .operating_state = candef_protium_state_operating_state_encode(operating_state),

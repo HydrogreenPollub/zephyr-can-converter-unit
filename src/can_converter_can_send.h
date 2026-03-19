@@ -17,6 +17,8 @@ void send_mcu_analog_fuel_cell(const MasterMeasurements *m);
 
 void send_mcu_analog_accessory(const MasterMeasurements *m);
 
+void send_mcu_faults(void);
+
 void send_protium_state(ProtiumOperatingState operating_state);
 
 #endif // CAN_CONVERTER_CAN_SEND_H

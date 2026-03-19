@@ -29,6 +29,7 @@ typedef struct {
 } rs485_packet_t;
 
 
-void ccu_rs485_init();
+void ccu_rs485_init(void);
+void ccu_rs485_test(void);
 
 #endif //CAN_CONVERTER_RS485_H

@@ -170,7 +170,15 @@ static void ccu_rs485_parser_thread(void *p1, void *p2, void *p3) {
     }
 }
 
-void ccu_rs485_init() {
+void ccu_rs485_test(void) {
+    gpio_set(&rs485.rx_led);
+    gpio_set(&rs485.tx_led);
+    k_work_reschedule(&rx_led_off_work, K_SECONDS(2));
+    k_work_reschedule(&tx_led_off_work, K_SECONDS(2));
+    LOG_INF("RS485 test: LEDs on");
+}
+
+void ccu_rs485_init(void) {
     gpio_init(&rs485.rx_led, GPIO_OUTPUT_INACTIVE);
     gpio_init(&rs485.tx_led, GPIO_OUTPUT_INACTIVE);
     k_work_init_delayable(&rx_led_off_work, rx_led_off_handler);
