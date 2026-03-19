@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Flash the application via JLink (sector erase only — preserves MCUboot)."""
+"""Build and flash the application via JLink (sector erase only — preserves MCUboot)."""
 
 import subprocess
 import sys
@@ -9,13 +9,32 @@ project_dir = Path(__file__).resolve().parent.parent
 workspace_dir = project_dir.parent
 build_dir = project_dir / "build"
 
+print("=" * 58)
+print(" Building app for hydrogreen/can_converter")
+print("=" * 58)
+
+ret = subprocess.run([
+    "west", "build", "-b", "can_converter",
+    str(project_dir),
+    "-d", str(build_dir),
+], cwd=str(workspace_dir))
+
+if ret.returncode != 0:
+    print("\nApp build FAILED.", file=sys.stderr)
+    sys.exit(ret.returncode)
+
+print()
+print("=" * 58)
+print(" Flashing app via JLink")
+print("=" * 58)
+
 ret = subprocess.run([
     "west", "flash", "--runner", "jlink",
     "--build-dir", str(build_dir),
 ], cwd=str(workspace_dir))
 
 if ret.returncode != 0:
-    print("App flash FAILED.", file=sys.stderr)
+    print("\nApp flash FAILED.", file=sys.stderr)
     sys.exit(ret.returncode)
 
-print("App flashed successfully.")
+print("\nApp flashed successfully.")
