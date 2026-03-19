@@ -1,6 +1,7 @@
 #include "can_converter_can_send.h"
 #include "can_converter_can.h"
 #include "candef.h"
+#include "status_led.h"
 
 LOG_MODULE_DECLARE(ccu_can, LOG_LEVEL_INF);
 
@@ -30,10 +31,17 @@ static void enqueue_frame(uint32_t id, const uint8_t *data, uint8_t len) {
     } while (0)
 
 void send_mcu_state(const MasterStatus *s) {
+    uint8_t buf[CANDEF_MCU_STATE_LENGTH];
     struct candef_mcu_state_t frame = {
         .status = candef_mcu_state_status_encode(s->state),
     };
-    PACK_AND_ENQUEUE(MCU_STATE, mcu_state, &frame);
+    candef_mcu_state_pack(buf, &frame, sizeof(buf));
+
+    /* Pack CCU node status (CiA 303-3) into MCU_STATE bits 9-11
+     * (unused in the current DBC, pending signal addition). */
+    buf[1] |= ((uint8_t)status_led_get() & 0x07) << 1;
+
+    enqueue_frame(CANDEF_MCU_STATE_FRAME_ID, buf, sizeof(buf));
 }
 
 void send_mcu_inputs(const MasterMeasurements *m) {
