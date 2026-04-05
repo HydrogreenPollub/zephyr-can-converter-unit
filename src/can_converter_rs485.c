@@ -1,100 +1,43 @@
-//
-// Created by inż. Dawid Pisarczyk on 08.03.2026.
-//
-
 #include "can_converter_rs485.h"
+
+#include <stddef.h>
 #include <pb_decode.h>
-#include "proto/master.pb.h"
+#include <zephyr/logging/log.h>
+
+#include "can_converter.h"
 #include "cobs.h"
+#include "gpio.h"
+#include "proto/master.pb.h"
+#include "rs485.h"
 
 LOG_MODULE_REGISTER(ccu_rs485, LOG_LEVEL_INF);
 
-#define CCU_RS485_PARSER_THREAD_STACK_SIZE 2048
-#define CCU_RS485_PARSER_THREAD_PRIORITY   5
+#define CCU_RS485_PARSER_STACK_SIZE  2048
+#define CCU_RS485_PARSER_PRIORITY    5
+#define CCU_RS485_RX_QUEUE_DEPTH     16
+#define CCU_RS485_RX_IDLE_TIMEOUT_US 5000
 
-K_THREAD_STACK_DEFINE(ccu_rs485_parser_thread_stack_area, CCU_RS485_PARSER_THREAD_STACK_SIZE);
-struct k_thread ccu_rs485_parser_thread_data;
+K_THREAD_STACK_DEFINE(rs485_parser_stack, CCU_RS485_PARSER_STACK_SIZE);
+static struct k_thread rs485_parser_thread;
 
-K_MSGQ_DEFINE(rs485_rx_msgq, sizeof(rs485_packet_t), 16, 4);
+K_MSGQ_DEFINE(rs485_rx_queue, sizeof(rs485_packet_t), CCU_RS485_RX_QUEUE_DEPTH, 4);
 
-static struct k_work_delayable rx_led_off_work;
-static struct k_work_delayable tx_led_off_work;
-
-/* COBS frame accumulation state (used only in the parser thread) */
-#define COBS_FRAME_BUF_SIZE 256
-static uint8_t cobs_frame_buf[COBS_FRAME_BUF_SIZE];
-static size_t  cobs_frame_len = 0;
-static bool    cobs_in_frame  = false;
-
-ccu_rs485_t rs485 = {
-    .device = DEVICE_DT_GET(DT_ALIAS(rs485)),
-    .dir_pin = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_dir), gpios),
-    .tx_led = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_tx_led), gpios),
-    .rx_led = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_rx_led), gpios),
-    .rx_buf = {0},
-    .rx_buf_next = {0},
+static rs485_ctx_t rs485 = {
+    .uart               = DEVICE_DT_GET(DT_ALIAS(rs485)),
+    .dir                = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_dir), gpios),
+    .tx_led             = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_tx_led), gpios),
+    .rx_led             = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_rx_led), gpios),
+    .rx_queue           = &rs485_rx_queue,
+    .rx_idle_timeout_us = CCU_RS485_RX_IDLE_TIMEOUT_US,
 };
 
 static volatile bool test_active;
 
-static void rx_led_off_handler(struct k_work *work) { if (!test_active) gpio_reset(&rs485.rx_led); }
-static void tx_led_off_handler(struct k_work *work) { if (!test_active) gpio_reset(&rs485.tx_led); }
-
-static uint8_t *rs485_free_buf;
-
-void rs485_callback(const struct device *dev, struct uart_event *evt, void *user_data) {
-    ARG_UNUSED(dev);
+static void on_frame(const uint8_t *decoded, size_t len, void *user_data) {
     ARG_UNUSED(user_data);
 
-    switch (evt->type) {
-        case UART_RX_RDY: {
-            rs485_packet_t packet = {0};
-            LOG_HEXDUMP_INF(&evt->data.rx.buf[evt->data.rx.offset], evt->data.rx.len, "RS485 Rx data");
-
-            size_t len = MIN(evt->data.rx.len, sizeof(packet.data));
-            memcpy(packet.data, evt->data.rx.buf + evt->data.rx.offset, len);
-            packet.len = len;
-            if (k_msgq_put(&rs485_rx_msgq, &packet, K_NO_WAIT) != 0) {
-                LOG_WRN("RS485 RX queue full");
-            }
-
-            gpio_set(&rs485.rx_led);
-            k_work_reschedule(&rx_led_off_work, K_MSEC(50));
-            break;
-        }
-        case UART_RX_BUF_REQUEST: {
-            uart_rx_buf_rsp(rs485.device, rs485_free_buf, sizeof(rs485.rx_buf));
-            break;
-        }
-        case UART_RX_BUF_RELEASED: {
-            rs485_free_buf = evt->data.rx_buf.buf;
-            break;
-        }
-        case UART_RX_DISABLED: {
-            LOG_WRN("RS485 RX disabled — restarting");
-            uart_rx_enable(rs485.device, rs485_free_buf, sizeof(rs485.rx_buf), 100);
-            break;
-        }
-        case UART_TX_DONE: {
-            LOG_INF("RS485 TX done");
-            rs485_on_tx_done();
-            gpio_set(&rs485.tx_led);
-            k_work_reschedule(&tx_led_off_work, K_MSEC(50));
-            break;
-        }
-        case UART_TX_ABORTED: {
-            LOG_INF("RS485 TX aborted");
-            rs485_on_tx_aborted(&rs485.dir_pin);
-            break;
-        }
-        default:
-            break;
-    }
-}
-
-static void process_master_frame(const uint8_t *buf, size_t len) {
     MasterFrame frame = MasterFrame_init_zero;
-    pb_istream_t stream = pb_istream_from_buffer(buf, len);
+    pb_istream_t stream = pb_istream_from_buffer(decoded, len);
 
     if (!pb_decode(&stream, MasterFrame_fields, &frame)) {
         LOG_WRN("NanoPB decode failed: %s", PB_GET_ERROR(&stream));
@@ -105,69 +48,53 @@ static void process_master_frame(const uint8_t *buf, size_t len) {
 
     switch (frame.which_payload) {
         case MasterFrame_master_measurements_tag:
-            data.master_measurements = frame.payload.master_measurements;
+            data.master_measurements       = frame.payload.master_measurements;
             data.master_measurements_valid = true;
+            LOG_INF("RX measurements ms=%u", frame.ms_clock_tick_count);
             break;
         case MasterFrame_master_status_tag:
-            data.master_status = frame.payload.master_status;
+            data.master_status       = frame.payload.master_status;
             data.master_status_valid = true;
+            LOG_INF("RX status ms=%u state=%d", frame.ms_clock_tick_count,
+                    (int)frame.payload.master_status.state);
             break;
         case MasterFrame_protium_values_tag:
-            data.protium_values = frame.payload.protium_values;
+            data.protium_values       = frame.payload.protium_values;
             data.protium_values_valid = true;
+            LOG_INF("RX Protium values ms=%u", frame.ms_clock_tick_count);
             break;
         case MasterFrame_protium_operating_state_tag:
             data.protium_operating_state =
                 frame.payload.protium_operating_state.current_state;
             data.protium_operating_state_valid = true;
+            LOG_INF("RX Protium state ms=%u state=%d", frame.ms_clock_tick_count,
+                    (int)frame.payload.protium_operating_state.current_state);
+            break;
+        case MasterFrame_master_faults_tag:
+            data.master_faults       = frame.payload.master_faults;
+            data.master_faults_valid = true;
+            LOG_INF("RX faults ms=%u", frame.ms_clock_tick_count);
             break;
         default:
-            LOG_WRN("Unknown master frame payload tag: %d", (int)frame.which_payload);
+            LOG_WRN("Unknown master frame payload tag: %d",
+                    (int)frame.which_payload);
             break;
     }
 
     k_mutex_unlock(&data_mutex);
 }
 
-static void process_byte(uint8_t byte) {
-    if (byte == 0x00u) {
-        if (cobs_in_frame && cobs_frame_len > 0) {
-            uint8_t decoded[COBS_FRAME_BUF_SIZE];
-            size_t decoded_len = cobs_decode(cobs_frame_buf, cobs_frame_len,
-                                             decoded, sizeof(decoded));
-            if (decoded_len > 0) {
-                process_master_frame(decoded, decoded_len);
-            } else {
-                LOG_WRN("COBS decode failed (frame_len=%u)", cobs_frame_len);
-            }
-        }
-        cobs_frame_len = 0;
-        cobs_in_frame  = true;
-        return;
-    }
-
-    if (!cobs_in_frame) {
-        return;
-    }
-
-    if (cobs_frame_len >= COBS_FRAME_BUF_SIZE) {
-        LOG_WRN("COBS frame overflow, resetting");
-        cobs_frame_len = 0;
-        cobs_in_frame  = false;
-        return;
-    }
-
-    cobs_frame_buf[cobs_frame_len++] = byte;
-}
-
-static void ccu_rs485_parser_thread(void *p1, void *p2, void *p3) {
+static void parser_thread_fn(void *p1, void *p2, void *p3) {
     rs485_packet_t packet;
+    cobs_parser_t  parser;
+
+    cobs_parser_init(&parser);
 
     while (1) {
-        k_msgq_get(&rs485_rx_msgq, &packet, K_FOREVER);
+        k_msgq_get(&rs485_rx_queue, &packet, K_FOREVER);
 
         for (size_t i = 0; i < packet.len; i++) {
-            process_byte(packet.data[i]);
+            cobs_parser_feed(&parser, packet.data[i], on_frame, NULL);
         }
     }
 }
@@ -184,20 +111,13 @@ void ccu_rs485_test_set(bool active) {
 }
 
 void ccu_rs485_init(void) {
-    gpio_init(&rs485.rx_led, GPIO_OUTPUT_INACTIVE);
-    gpio_init(&rs485.tx_led, GPIO_OUTPUT_INACTIVE);
-    k_work_init_delayable(&rx_led_off_work, rx_led_off_handler);
-    k_work_init_delayable(&tx_led_off_work, tx_led_off_handler);
-    rs485_free_buf = rs485.rx_buf_next;
-    rs485_init(rs485.device, &rs485.dir_pin);
-    uart_callback_set_(rs485.device, rs485_callback);
-    uart_rx_init(rs485.device, rs485.rx_buf, sizeof(rs485.rx_buf), 5000);
+    rs485_init(&rs485);
 
-    k_tid_t tid = k_thread_create(&ccu_rs485_parser_thread_data,
-                                  ccu_rs485_parser_thread_stack_area,
-                                  K_THREAD_STACK_SIZEOF(ccu_rs485_parser_thread_stack_area),
-                                  ccu_rs485_parser_thread,
+    k_tid_t tid = k_thread_create(&rs485_parser_thread,
+                                  rs485_parser_stack,
+                                  K_THREAD_STACK_SIZEOF(rs485_parser_stack),
+                                  parser_thread_fn,
                                   NULL, NULL, NULL,
-                                  CCU_RS485_PARSER_THREAD_PRIORITY, 0, K_NO_WAIT);
+                                  CCU_RS485_PARSER_PRIORITY, 0, K_NO_WAIT);
     k_thread_name_set(tid, "rs485_parser");
 }

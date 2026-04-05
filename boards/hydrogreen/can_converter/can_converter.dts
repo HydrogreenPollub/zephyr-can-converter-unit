@@ -125,7 +125,7 @@
 &usart1 {
 	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
 	pinctrl-names = "default";
-	current-speed = <115200>;
+	current-speed = <921600>;
 	status = "okay";
 	dmas = <&dmamux1 2 25 STM32_DMA_PERIPH_TX>,
 		   <&dmamux1 1 24 STM32_DMA_PERIPH_RX>;

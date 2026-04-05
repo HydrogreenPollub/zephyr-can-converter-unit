@@ -1,8 +1,14 @@
 #include "can_converter_can.h"
-#include "can_converter_can_send.h"
+#include "can_converter_frames.h"
 #include "can_converter_dfu.h"
 #include "status_led.h"
 #include "candef.h"
+#include "can_ids.h"
+
+#include <zephyr/logging/log.h>
+
+#include "can.h"
+#include "gpio.h"
 
 LOG_MODULE_REGISTER(ccu_can, LOG_LEVEL_INF);
 
@@ -113,6 +119,7 @@ static void ccu_can_tx_thread(void *p1, void *p2, void *p3) {
 static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
     uint8_t cnt_100ms = 0;
     uint8_t cnt_1000ms = 0;
+
     while (1) {
         k_sleep(K_MSEC(10));
 
@@ -129,29 +136,52 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
         d = data;
         k_mutex_unlock(&data_mutex);
 
+        /* 10 ms — fast signals */
+        if (d.master_measurements_valid) {
+            send_mcu_analog_speed(&d.master_measurements);
+        }
+
         cnt_100ms++;
         cnt_1000ms++;
 
+        /* 100 ms — analog + state + faults */
+        if (cnt_100ms >= 10) {
+            cnt_100ms = 0;
+
+            if (d.master_measurements_valid) {
+                send_mcu_analog_pedals(&d.master_measurements);
+                send_mcu_analog_powertrain(&d.master_measurements);
+                send_mcu_analog_fuel_cell(&d.master_measurements);
+                send_mcu_analog_accessory(&d.master_measurements);
+                send_mcu_analog_unassigned(&d.master_measurements);
+                send_mcu_inputs(&d.master_measurements);
+            }
+
+            if (d.master_status_valid) {
+                send_mcu_state(&d.master_status);
+            }
+
+            if (d.master_faults_valid) {
+                send_mcu_faults(&d.master_faults);
+            }
+        }
+
+        /* 1000 ms — Protium data */
         if (cnt_1000ms >= 100) {
             cnt_1000ms = 0;
-
-            send_mcu_faults();
 
             if (d.protium_operating_state_valid) {
                 send_protium_state(d.protium_operating_state);
             }
-        }
 
-        if (cnt_100ms >= 10) {
-            cnt_100ms = 0;
-
-            send_mcu_analog_drive(&d.master_measurements);
-            send_mcu_analog_pedals(&d.master_measurements);
-            send_mcu_analog_powertrain(&d.master_measurements);
-            send_mcu_analog_fuel_cell(&d.master_measurements);
-            send_mcu_analog_accessory(&d.master_measurements);
-            send_mcu_inputs(&d.master_measurements);
-            send_mcu_state(&d.master_status);
+            if (d.protium_values_valid) {
+                send_protium_power(&d.protium_values);
+                send_protium_thermal(&d.protium_values);
+                send_protium_hydrogen(&d.protium_values);
+                send_protium_setpoints(&d.protium_values);
+                send_protium_stasis(&d.protium_values);
+                send_protium_misc(&d.protium_values);
+            }
         }
     }
 }
@@ -214,14 +244,15 @@ void ccu_can_test_send_all(void) {
     d = data;
     k_mutex_unlock(&data_mutex);
 
-    send_mcu_analog_drive(&d.master_measurements);
+    send_mcu_analog_speed(&d.master_measurements);
     send_mcu_analog_pedals(&d.master_measurements);
     send_mcu_analog_powertrain(&d.master_measurements);
     send_mcu_analog_fuel_cell(&d.master_measurements);
     send_mcu_analog_accessory(&d.master_measurements);
+    send_mcu_analog_unassigned(&d.master_measurements);
     send_mcu_inputs(&d.master_measurements);
     send_mcu_state(&d.master_status);
-    send_mcu_faults();
+    send_mcu_faults(&d.master_faults);
     if (d.protium_operating_state_valid) {
         send_protium_state(d.protium_operating_state);
     }

@@ -1,35 +1,28 @@
-//
-// Created by User on 08.03.2026.
-//
+/**
+ * @file can_converter_rs485.h
+ * @brief RS485 receive path for the CAN converter.
+ *
+ * Owns the RS485 context, a COBS stream parser, and the receive thread that
+ * decodes incoming NanoPB frames and writes them into the shared data store.
+ */
 
-#ifndef CAN_CONVERTER_RS485_H
-#define CAN_CONVERTER_RS485_H
+#pragma once
 
-#include <stdint.h>
-#include <stdio.h>
-#include <zephyr/device.h>
-#include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
-#include "gpio.h"
-#include "rs485.h"
-#include "can_converter.h"
+#include <stdbool.h>
 
-typedef struct {
-    const struct device *device;
-    struct gpio_dt_spec dir_pin;
-    struct gpio_dt_spec tx_led;
-    struct gpio_dt_spec rx_led;
-    uint8_t rx_buf[RS485_RX_BUF_SIZE];
-    uint8_t rx_buf_next[RS485_RX_BUF_SIZE];
-} ccu_rs485_t;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef struct {
-    uint8_t data[RS485_RX_BUF_SIZE];
-    size_t len;
-} rs485_packet_t;
-
-
+/**
+ * @brief Initialise the RS485 subsystem and start the receive thread.
+ *
+ * Calls rs485_init() on the internal context (configures hardware, registers
+ * the UART callback, starts DMA reception), then spawns the parser thread.
+ */
 void ccu_rs485_init(void);
 void ccu_rs485_test_set(bool active);
 
-#endif //CAN_CONVERTER_RS485_H
+#ifdef __cplusplus
+}
+#endif

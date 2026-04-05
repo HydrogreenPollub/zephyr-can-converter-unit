@@ -43,10 +43,10 @@ target_sources(app PRIVATE
         src/main.c
         src/can_converter.c
         src/can_converter_can.c
-        src/can_converter_can_send.c
+        src/can_converter_frames.c
         src/can_converter_rs485.c
         src/can_converter_dfu.c
-        src/cobs.c
+        peripherals/cobs.c
         peripherals/can.c
         peripherals/can_dfu.c
         peripherals/gpio.c

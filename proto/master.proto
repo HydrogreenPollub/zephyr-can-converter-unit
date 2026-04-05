@@ -1,5 +1,34 @@
 syntax = "proto3";
 
+/**
+ * Vehicle type identifier. Values match the CAN DBC VEHICLE_TYPE encoding.
+ */
+enum VehicleType {
+    HYDROS_V1 = 0;
+    HYDROS_V2 = 1;
+    BOLID = 2;
+    HYDRA = 3;
+}
+
+/**
+ * Digital inputs from the master unit, one field per physical DIN pin.
+ * Field numbers follow the DIN pin order (1-based).
+ */
+message DigitalInputs {
+    bool gas_pedal = 1;           // DIN1 — acceleration pedal threshold
+    bool start_button = 2;        // DIN2
+    bool dead_mans_switch = 3;    // DIN3
+    bool emergency_switch = 4;    // DIN4
+    bool reset_button = 5;        // DIN5
+    bool calibration_button = 6;  // DIN6
+    bool leakage_detected = 7;    // DIN7 — hydrogen leakage sensor switch
+    bool shell_relay = 8;         // DIN8 — Shell telemetry emergency relay
+}
+
+/**
+ * Conditioned analog measurements from the master unit.
+ * Field layout mirrors the Measurements struct on the TM4C side.
+ */
 message MasterMeasurements {
     float ai1 = 1;
     float supercapacitor_current = 2;
@@ -17,24 +46,59 @@ message MasterMeasurements {
     float fuel_cell_output_voltage = 14;
     float supercapacitor_voltage = 15;
     float motor_controller_supply_voltage = 16;
-    uint32 din = 17;
+    DigitalInputs din = 17;
     float rpm = 18;
     float speed = 19;
 }
 
+/**
+ * Master state machine status and actuator outputs.
+ * State enum values match the SCADE SSM_ST_mainAutomaton ordering.
+ */
 message MasterStatus {
     enum State {
-        IDLE = 0;
-        RUNNING = 1;
-        SHUTDOWN = 2;
-        FAILURE = 3;
+        INIT = 0;
+        IDLE = 1;
+        STARTING = 2;
+        RUNNING = 3;
+        SHUTTING_DOWN = 4;
+        FAILURE = 5;
     }
     uint32 serial_number = 1;
     State state = 2;
-    bool main_valve_enable_output = 3;
-    bool motor_controller_enable_output = 4;
-    float accel_output_voltage = 5;
-    float brake_output_voltage = 6;
+    VehicleType vehicle_type = 3;
+    bool vehicle_allowed_to_move = 4;
+    bool main_valve_enabled = 5;
+    bool motor_controller_enabled = 6;
+    float accel_output_voltage = 7;
+    float brake_output_voltage = 8;
+}
+
+/**
+ * Data validation faults from the SCADE Validation block.
+ * Emergency flags (emg_*) trigger a transition to the Failure state.
+ * Error flags (err_*) indicate sensor out-of-range conditions.
+ */
+message MasterFaults {
+    // Emergency flags
+    bool emg_emergency_switch = 1;
+    bool emg_dead_mans_switch = 2;
+    bool emg_leakage_sensor_switch = 3;
+    bool emg_hydrogen_leakage_voltage = 4;
+
+    // Sensor error flags
+    bool err_fuel_cell_output_voltage = 5;
+    bool err_fuel_cell_output_current = 6;
+    bool err_supercapacitor_voltage = 7;
+    bool err_supercapacitor_current = 8;
+    bool err_motor_controller_supply_voltage = 9;
+    bool err_motor_controller_supply_current = 10;
+    bool err_accessory_battery_voltage = 11;
+    bool err_accessory_battery_current = 12;
+    bool err_accel_pedal_voltage = 13;
+    bool err_brake_pedal_voltage = 14;
+    bool err_hydrogen_high_pressure = 15;
+    bool err_speed = 16;
 }
 
 enum ProtiumOperatingState {
@@ -98,5 +162,6 @@ message MasterFrame {
         MasterStatus master_status = 4;
         ProtiumValues protium_values = 5;
         ProtiumOperatingStateMsg protium_operating_state = 6;
+        MasterFaults master_faults = 7;
     }
 }
