@@ -1,3 +1,4 @@
+
 #include <zephyr/logging/log.h>
 #include <zephyr/dfu/mcuboot.h>
 #include "can_converter.h"

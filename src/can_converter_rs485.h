@@ -9,10 +9,14 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/** Running count of successfully decoded NanoPB frames from the Master. */
+extern volatile uint32_t rs485_frames_received;
 
 /**
  * @brief Initialise the RS485 subsystem and start the receive thread.

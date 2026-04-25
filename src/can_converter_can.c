@@ -1,5 +1,6 @@
 #include "can_converter_can.h"
 #include "can_converter_frames.h"
+#include "can_converter_rs485.h"
 #include "can_converter_dfu.h"
 #include "status_led.h"
 #include "candef.h"
@@ -10,7 +11,7 @@
 #include "can.h"
 #include "gpio.h"
 
-LOG_MODULE_REGISTER(ccu_can, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(ccu, LOG_LEVEL_INF);
 
 #define CCU_CAN_TX_THREAD_STACK_SIZE       2048
 #define CCU_CAN_TX_THREAD_PRIORITY         5
@@ -26,8 +27,9 @@ struct k_thread ccu_can_periodic_thread_data;
 K_SEM_DEFINE(can_tx_done_sem, 0, 1);
 K_MSGQ_DEFINE(can_tx_msgq, sizeof(struct can_frame), 32, 4);
 
-static volatile int can_tx_result;
-static volatile bool test_active;
+static volatile int      can_tx_result;
+static volatile bool     test_active;
+static volatile uint32_t can_frames_tx_ok;
 static struct k_work_delayable tx_led_off_work;
 static struct k_work_delayable rx_led_off_work;
 static struct k_work_delayable bus_off_recovery_work;
@@ -111,14 +113,21 @@ static void ccu_can_tx_thread(void *p1, void *p2, void *p3) {
             continue;
         }
 
+        can_frames_tx_ok++;
         gpio_set(&can.tx_led);
         k_work_reschedule(&tx_led_off_work, K_MSEC(50));
     }
 }
 
 static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
-    uint8_t cnt_100ms = 0;
-    uint8_t cnt_1000ms = 0;
+    uint8_t cnt_100ms    = 0;
+    uint8_t cnt_1000ms   = 0;
+    uint8_t cnt_1s       = 0;
+    uint8_t cnt_unassign = 0;  /* 0.1 Hz: send MCU_ANALOG_UNASSIGNED every 10 s */
+
+    uint32_t           prev_rs485_rx  = 0;
+    uint32_t           prev_can_tx_ok = 0;
+    ccu_frame_counts_t prev_frames    = {0};
 
     while (1) {
         k_sleep(K_MSEC(10));
@@ -136,39 +145,38 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
         d = data;
         k_mutex_unlock(&data_mutex);
 
-        /* 10 ms — fast signals */
-        if (d.master_measurements_valid) {
-            send_mcu_analog_speed(&d.master_measurements);
+        /* 10 ms — 100 Hz: state machine + faults (high-priority, safety-relevant) */
+        if (d.master_status_valid) {
+            send_mcu_state(&d.master_status);
+        }
+
+        if (d.master_faults_valid) {
+            send_mcu_faults(&d.master_faults);
         }
 
         cnt_100ms++;
         cnt_1000ms++;
 
-        /* 100 ms — analog + state + faults */
+        /* 100 ms — 10 Hz: speed + powertrain analog */
         if (cnt_100ms >= 10) {
             cnt_100ms = 0;
 
             if (d.master_measurements_valid) {
-                send_mcu_analog_pedals(&d.master_measurements);
+                send_mcu_analog_speed(&d.master_measurements);
                 send_mcu_analog_powertrain(&d.master_measurements);
                 send_mcu_analog_fuel_cell(&d.master_measurements);
                 send_mcu_analog_accessory(&d.master_measurements);
-                send_mcu_analog_unassigned(&d.master_measurements);
-                send_mcu_inputs(&d.master_measurements);
-            }
-
-            if (d.master_status_valid) {
-                send_mcu_state(&d.master_status);
-            }
-
-            if (d.master_faults_valid) {
-                send_mcu_faults(&d.master_faults);
             }
         }
 
-        /* 1000 ms — Protium data */
+        /* 1000 ms — 1 Hz: slow analog + digital inputs + Protium */
         if (cnt_1000ms >= 100) {
             cnt_1000ms = 0;
+
+            if (d.master_measurements_valid) {
+                send_mcu_analog_pedals(&d.master_measurements);
+                send_mcu_inputs(&d.master_measurements);
+            }
 
             if (d.protium_operating_state_valid) {
                 send_protium_state(d.protium_operating_state);
@@ -182,6 +190,78 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
                 send_protium_stasis(&d.protium_values);
                 send_protium_misc(&d.protium_values);
             }
+        }
+
+        /* 1 s — diagnostic stats report */
+        cnt_1s++;
+        if (cnt_1s >= 100) {
+            cnt_1s = 0;
+
+            /* 0.1 Hz — unassigned analog inputs (every 10th 1 s tick) */
+            cnt_unassign++;
+            if (cnt_unassign >= 10) {
+                cnt_unassign = 0;
+                if (d.master_measurements_valid) {
+                    send_mcu_analog_unassigned(&d.master_measurements);
+                }
+            }
+
+            uint32_t cur_rs485  = rs485_frames_received;
+            uint32_t cur_can_ok = can_frames_tx_ok;
+
+            uint32_t d_rs485  = cur_rs485  - prev_rs485_rx;
+            uint32_t d_can_ok = cur_can_ok - prev_can_tx_ok;
+
+/* Frames enqueued in the last 1 s window == Hz directly. */
+#define HZ(field) (frame_counts.field - prev_frames.field)
+
+            LOG_INF("=== 1s stats: RS485 RX %u Hz | CAN TX ok %u ===",
+                    d_rs485, d_can_ok);
+
+            if (d.master_status_valid) {
+                LOG_INF("  MCU state=%d move=%c mc=%c valve=%c",
+                        (int)d.master_status.state,
+                        d.master_status.vehicle_allowed_to_move  ? 'Y' : 'N',
+                        d.master_status.motor_controller_enabled ? 'Y' : 'N',
+                        d.master_status.main_valve_enabled       ? 'Y' : 'N');
+            }
+
+            if (d.master_faults_valid) {
+                LOG_INF("  EMG: switch=%c dms=%c leak=%c"
+                        " | ERR: fc_v=%c fc_c=%c sc_v=%c sc_c=%c"
+                        " mc_v=%c mc_c=%c ab_v=%c ab_c=%c",
+                        d.master_faults.emg_emergency_switch          ? 'Y' : 'N',
+                        d.master_faults.emg_dead_mans_switch          ? 'Y' : 'N',
+                        d.master_faults.emg_leakage_sensor_switch     ? 'Y' : 'N',
+                        d.master_faults.err_fuel_cell_output_voltage  ? 'Y' : 'N',
+                        d.master_faults.err_fuel_cell_output_current  ? 'Y' : 'N',
+                        d.master_faults.err_supercapacitor_voltage    ? 'Y' : 'N',
+                        d.master_faults.err_supercapacitor_current    ? 'Y' : 'N',
+                        d.master_faults.err_motor_controller_supply_voltage  ? 'Y' : 'N',
+                        d.master_faults.err_motor_controller_supply_current  ? 'Y' : 'N',
+                        d.master_faults.err_accessory_battery_voltage ? 'Y' : 'N',
+                        d.master_faults.err_accessory_battery_current ? 'Y' : 'N');
+            }
+
+            LOG_INF("  MCU Hz:"
+                    " STATE=%u FAULTS=%u DRIVE=%u"
+                    " PT=%u FC=%u ACC=%u PEDALS=%u INPUTS=%u",
+                    HZ(mcu_state), HZ(mcu_faults), HZ(mcu_analog_speed),
+                    HZ(mcu_analog_powertrain), HZ(mcu_analog_fuel_cell),
+                    HZ(mcu_analog_accessory),
+                    HZ(mcu_analog_pedals), HZ(mcu_inputs));
+            LOG_INF("  PROT Hz:"
+                    " STATE=%u POWER=%u THERMAL=%u"
+                    " HYDROGEN=%u SETPOINTS=%u STASIS=%u MISC=%u",
+                    HZ(protium_state), HZ(protium_power), HZ(protium_thermal),
+                    HZ(protium_hydrogen), HZ(protium_setpoints),
+                    HZ(protium_stasis), HZ(protium_misc));
+
+#undef HZ
+
+            prev_rs485_rx  = cur_rs485;
+            prev_can_tx_ok = cur_can_ok;
+            prev_frames    = frame_counts;
         }
     }
 }

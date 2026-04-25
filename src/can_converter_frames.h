@@ -12,7 +12,37 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 #include "can_converter.h"
+
+/**
+ * @brief Running enqueue counts for every CAN frame type.
+ *
+ * Written only from ccu_can_periodic_thread — no synchronisation needed.
+ * Read from the same thread for the 10 s stats report.
+ */
+typedef struct {
+    uint32_t mcu_analog_speed;
+    uint32_t mcu_analog_pedals;
+    uint32_t mcu_analog_powertrain;
+    uint32_t mcu_analog_fuel_cell;
+    uint32_t mcu_analog_accessory;
+    uint32_t mcu_analog_unassigned;
+    uint32_t mcu_inputs;
+    uint32_t mcu_state;
+    uint32_t mcu_faults;
+    uint32_t mcu_time_sync;
+    uint32_t protium_state;
+    uint32_t protium_power;
+    uint32_t protium_thermal;
+    uint32_t protium_hydrogen;
+    uint32_t protium_setpoints;
+    uint32_t protium_stasis;
+    uint32_t protium_misc;
+} ccu_frame_counts_t;
+
+extern ccu_frame_counts_t frame_counts;
 
 /* ── MCU frames ────────────────────────────────────────────────────────── */
 

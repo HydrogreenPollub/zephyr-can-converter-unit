@@ -22,10 +22,10 @@ void OnProjectLoad (void) {
   //
   // Dialog-generated settings
   //
-  Project.AddPathSubstitute ("C:/Users/ErgoA/Documents/GitHub/zephyr-hydrogreen-workspace/zephyr-can-converter-unit", "$(ProjectDir)");
-  Project.AddPathSubstitute ("c:/users/ergoa/documents/github/zephyr-hydrogreen-workspace/zephyr-can-converter-unit", "$(ProjectDir)");
+  Project.AddPathSubstitute ("C:/Users/ErgoA/projects/zephyr-hydrogreen-workspace/zephyr-can-converter-unit", "$(ProjectDir)");
+  Project.AddPathSubstitute ("c:/users/ergoa/projects/zephyr-hydrogreen-workspace/zephyr-can-converter-unit", "$(ProjectDir)");
   Project.SetDevice ("STM32G491CE");
-  Project.SetHostIF ("USB", "69747500");
+  Project.SetHostIF ("USB", "696567783");
   Project.SetTargetIF ("SWD");
   Project.SetTIFSpeed ("4 MHz");
   Project.AddSvdFile ("$(InstallDir)/Config/CPU/Cortex-M4F.svd");

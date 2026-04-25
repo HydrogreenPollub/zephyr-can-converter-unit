@@ -8,7 +8,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_DECLARE(ccu_can, LOG_LEVEL_INF);
+LOG_MODULE_DECLARE(ccu, LOG_LEVEL_INF);
+
+ccu_frame_counts_t frame_counts;
 
 static void enqueue_frame(uint32_t id, const uint8_t *data, uint8_t len) {
     struct can_frame frame = {};
@@ -37,6 +39,7 @@ void send_mcu_time_sync(uint32_t ms_tick, uint32_t cycle_tick) {
         .clock_cycles = candef_mcu_time_sync_clock_cycles_encode((double)cycle_tick),
     };
     PACK_AND_ENQUEUE(MCU_TIME_SYNC, mcu_time_sync, &frame);
+    frame_counts.mcu_time_sync++;
 }
 
 void send_mcu_state(const MasterStatus *s) {
@@ -48,6 +51,7 @@ void send_mcu_state(const MasterStatus *s) {
         .main_valve_enabled       = candef_mcu_state_main_valve_enabled_encode(s->main_valve_enabled),
     };
     PACK_AND_ENQUEUE(MCU_STATE, mcu_state, &frame);
+    frame_counts.mcu_state++;
 }
 
 void send_mcu_inputs(const MasterMeasurements *m) {
@@ -62,6 +66,7 @@ void send_mcu_inputs(const MasterMeasurements *m) {
         .gas_pedal           = m->din.gas_pedal,
     };
     PACK_AND_ENQUEUE(MCU_INPUTS, mcu_inputs, &frame);
+    frame_counts.mcu_inputs++;
 }
 
 void send_mcu_faults(const MasterFaults *f) {
@@ -88,6 +93,7 @@ void send_mcu_faults(const MasterFaults *f) {
         .error_ab_c_high = f->err_accessory_battery_current,
     };
     PACK_AND_ENQUEUE(MCU_FAULTS, mcu_faults, &frame);
+    frame_counts.mcu_faults++;
 }
 
 void send_mcu_analog_speed(const MasterMeasurements *m) {
@@ -96,6 +102,7 @@ void send_mcu_analog_speed(const MasterMeasurements *m) {
         .speed = candef_mcu_analog_drive_speed_encode((double)m->speed),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_DRIVE, mcu_analog_drive, &frame);
+    frame_counts.mcu_analog_speed++;
 }
 
 void send_mcu_analog_pedals(const MasterMeasurements *m) {
@@ -108,6 +115,7 @@ void send_mcu_analog_pedals(const MasterMeasurements *m) {
                 (double)m->brake_pedal_voltage),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_PEDALS, mcu_analog_pedals, &frame);
+    frame_counts.mcu_analog_pedals++;
 }
 
 void send_mcu_analog_powertrain(const MasterMeasurements *m) {
@@ -126,6 +134,7 @@ void send_mcu_analog_powertrain(const MasterMeasurements *m) {
                 (double)m->motor_controller_supply_voltage),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_POWERTRAIN, mcu_analog_powertrain, &frame);
+    frame_counts.mcu_analog_powertrain++;
 }
 
 void send_mcu_analog_fuel_cell(const MasterMeasurements *m) {
@@ -144,6 +153,7 @@ void send_mcu_analog_fuel_cell(const MasterMeasurements *m) {
                 (double)m->hydrogen_leakage_sensor_voltage),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_FUEL_CELL, mcu_analog_fuel_cell, &frame);
+    frame_counts.mcu_analog_fuel_cell++;
 }
 
 void send_mcu_analog_accessory(const MasterMeasurements *m) {
@@ -156,6 +166,7 @@ void send_mcu_analog_accessory(const MasterMeasurements *m) {
                 (double)m->accessory_battery_voltage),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_ACCESSORY, mcu_analog_accessory, &frame);
+    frame_counts.mcu_analog_accessory++;
 }
 
 void send_mcu_analog_unassigned(const MasterMeasurements *m) {
@@ -166,6 +177,7 @@ void send_mcu_analog_unassigned(const MasterMeasurements *m) {
         .ai5 = candef_mcu_analog_unassigned_ai5_encode((double)m->ai5),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_UNASSIGNED, mcu_analog_unassigned, &frame);
+    frame_counts.mcu_analog_unassigned++;
 }
 
 /* ── Protium frame encoders ────────────────────────────────────────────── */
@@ -176,6 +188,7 @@ void send_protium_state(ProtiumOperatingState operating_state) {
             candef_protium_state_operating_state_encode(operating_state),
     };
     PACK_AND_ENQUEUE(PROTIUM_STATE, protium_state, &frame);
+    frame_counts.protium_state++;
 }
 
 void send_protium_power(const ProtiumValues *v) {
@@ -186,6 +199,7 @@ void send_protium_power(const ProtiumValues *v) {
         .energy = candef_protium_power_energy_encode((double)v->energy),
     };
     PACK_AND_ENQUEUE(PROTIUM_POWER, protium_power, &frame);
+    frame_counts.protium_power++;
 }
 
 void send_protium_thermal(const ProtiumValues *v) {
@@ -196,6 +210,7 @@ void send_protium_thermal(const ProtiumValues *v) {
         .blw  = candef_protium_thermal_blw_encode((double)v->blw),
     };
     PACK_AND_ENQUEUE(PROTIUM_THERMAL, protium_thermal, &frame);
+    frame_counts.protium_thermal++;
 }
 
 void send_protium_hydrogen(const ProtiumValues *v) {
@@ -206,6 +221,7 @@ void send_protium_hydrogen(const ProtiumValues *v) {
         .tank_t = candef_protium_hydrogen_tank_t_encode((double)v->tank_t),
     };
     PACK_AND_ENQUEUE(PROTIUM_HYDROGEN, protium_hydrogen, &frame);
+    frame_counts.protium_hydrogen++;
 }
 
 void send_protium_setpoints(const ProtiumValues *v) {
@@ -216,6 +232,7 @@ void send_protium_setpoints(const ProtiumValues *v) {
         .number_of_cells = candef_protium_setpoints_number_of_cells_encode((double)v->number_of_cell),
     };
     PACK_AND_ENQUEUE(PROTIUM_SETPOINTS, protium_setpoints, &frame);
+    frame_counts.protium_setpoints++;
 }
 
 void send_protium_stasis(const ProtiumValues *v) {
@@ -226,6 +243,7 @@ void send_protium_stasis(const ProtiumValues *v) {
         .batt_v          = candef_protium_stasis_batt_v_encode((double)v->batt_v),
     };
     PACK_AND_ENQUEUE(PROTIUM_STASIS, protium_stasis, &frame);
+    frame_counts.protium_stasis++;
 }
 
 void send_protium_misc(const ProtiumValues *v) {
@@ -234,4 +252,5 @@ void send_protium_misc(const ProtiumValues *v) {
         .tp = candef_protium_misc_tp_encode((double)v->tp),
     };
     PACK_AND_ENQUEUE(PROTIUM_MISC, protium_misc, &frame);
+    frame_counts.protium_misc++;
 }

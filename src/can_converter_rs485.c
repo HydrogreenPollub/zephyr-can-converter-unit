@@ -12,6 +12,8 @@
 
 LOG_MODULE_REGISTER(ccu_rs485, LOG_LEVEL_INF);
 
+volatile uint32_t rs485_frames_received;
+
 #define CCU_RS485_PARSER_STACK_SIZE  2048
 #define CCU_RS485_PARSER_PRIORITY    5
 #define CCU_RS485_RX_QUEUE_DEPTH     16
@@ -50,30 +52,31 @@ static void on_frame(const uint8_t *decoded, size_t len, void *user_data) {
         case MasterFrame_master_measurements_tag:
             data.master_measurements       = frame.payload.master_measurements;
             data.master_measurements_valid = true;
-            LOG_INF("RX measurements ms=%u", frame.ms_clock_tick_count);
+            LOG_DBG("Received \"measurements\" frame at ms=%u", frame.ms_clock_tick_count);
             break;
         case MasterFrame_master_status_tag:
             data.master_status       = frame.payload.master_status;
             data.master_status_valid = true;
-            LOG_INF("RX status ms=%u state=%d", frame.ms_clock_tick_count,
+            LOG_DBG("Received \"status\" frame at ms=%u state=%d", frame.ms_clock_tick_count,
                     (int)frame.payload.master_status.state);
             break;
         case MasterFrame_protium_values_tag:
             data.protium_values       = frame.payload.protium_values;
             data.protium_values_valid = true;
-            LOG_INF("RX Protium values ms=%u", frame.ms_clock_tick_count);
+            LOG_DBG("Received \"Protium values\" frame at ms=%u", frame.ms_clock_tick_count);
             break;
         case MasterFrame_protium_operating_state_tag:
             data.protium_operating_state =
                 frame.payload.protium_operating_state.current_state;
             data.protium_operating_state_valid = true;
-            LOG_INF("RX Protium state ms=%u state=%d", frame.ms_clock_tick_count,
+            LOG_DBG("Received \"Protium state\" frame at ms=%u state=%d",
+                    frame.ms_clock_tick_count,
                     (int)frame.payload.protium_operating_state.current_state);
             break;
         case MasterFrame_master_faults_tag:
             data.master_faults       = frame.payload.master_faults;
             data.master_faults_valid = true;
-            LOG_INF("RX faults ms=%u", frame.ms_clock_tick_count);
+            LOG_DBG("Received \"faults\" frame at ms=%u", frame.ms_clock_tick_count);
             break;
         default:
             LOG_WRN("Unknown master frame payload tag: %d",
@@ -82,6 +85,8 @@ static void on_frame(const uint8_t *decoded, size_t len, void *user_data) {
     }
 
     k_mutex_unlock(&data_mutex);
+
+    rs485_frames_received++;
 }
 
 static void parser_thread_fn(void *p1, void *p2, void *p3) {
@@ -91,7 +96,10 @@ static void parser_thread_fn(void *p1, void *p2, void *p3) {
     cobs_parser_init(&parser);
 
     while (1) {
-        k_msgq_get(&rs485_rx_queue, &packet, K_FOREVER);
+        if (k_msgq_get(&rs485_rx_queue, &packet, K_MSEC(500)) != 0) {
+            LOG_WRN("No RS485 packet for 500 ms — RX may have stalled");
+            continue;
+        }
 
         for (size_t i = 0; i < packet.len; i++) {
             cobs_parser_feed(&parser, packet.data[i], on_frame, NULL);
