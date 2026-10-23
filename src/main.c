@@ -4,7 +4,7 @@
 #include "can_converter.h"
 #include "can_converter_can.h"
 #include "can_converter_rs485.h"
-#include "status_led.h"
+#include <hydrogreen/peripherals/status_led.h>
 
 LOG_MODULE_REGISTER(main);
 

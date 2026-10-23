@@ -2,14 +2,14 @@
 #include "can_converter_frames.h"
 #include "can_converter_rs485.h"
 #include "can_converter_dfu.h"
-#include "status_led.h"
-#include "candef.h"
-#include "can_ids.h"
+#include <hydrogreen/peripherals/status_led.h>
+#include <hydrogreen/can/candef.h>
+#include <hydrogreen/can/can_ids.h>
 
 #include <zephyr/logging/log.h>
 
-#include "can.h"
-#include "gpio.h"
+#include <hydrogreen/peripherals/can.h>
+#include <hydrogreen/peripherals/gpio.h>
 
 LOG_MODULE_REGISTER(ccu, LOG_LEVEL_INF);
 

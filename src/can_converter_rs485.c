@@ -5,10 +5,10 @@
 #include <zephyr/logging/log.h>
 
 #include "can_converter.h"
-#include "cobs.h"
-#include "gpio.h"
+#include <hydrogreen/peripherals/cobs.h>
+#include <hydrogreen/peripherals/gpio.h>
 #include "proto/master.pb.h"
-#include "rs485.h"
+#include <hydrogreen/peripherals/rs485.h>
 
 LOG_MODULE_REGISTER(ccu_rs485, LOG_LEVEL_INF);
 

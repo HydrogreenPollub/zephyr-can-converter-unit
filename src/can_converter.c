@@ -1,8 +1,8 @@
 #include "can_converter.h"
 #include "can_converter_can.h"
 #include "can_converter_rs485.h"
-#include "status_led.h"
-#include "test_button.h"
+#include <hydrogreen/peripherals/status_led.h>
+#include <hydrogreen/peripherals/test_button.h>
 
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>

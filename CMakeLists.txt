@@ -17,8 +17,6 @@ include(nanopb)
 zephyr_nanopb_sources(app proto/master.proto)
 
 target_include_directories(app PRIVATE
-        peripherals
-        can-definitions
         src
 )
 
@@ -46,16 +44,4 @@ target_sources(app PRIVATE
         src/can_converter_frames.c
         src/can_converter_rs485.c
         src/can_converter_dfu.c
-        peripherals/cobs.c
-        peripherals/can.c
-        peripherals/can_dfu.c
-        peripherals/gpio.c
-        peripherals/adc.c
-        peripherals/pwm.c
-        peripherals/counter.c
-        peripherals/uart.c
-        peripherals/rs485.c
-        peripherals/status_led.c
-        peripherals/test_button.c
-        can-definitions/candef.c
 )

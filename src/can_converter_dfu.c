@@ -1,5 +1,5 @@
 #include "can_converter_dfu.h"
-#include "status_led.h"
+#include <hydrogreen/peripherals/status_led.h>
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>

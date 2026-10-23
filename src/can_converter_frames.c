@@ -1,8 +1,8 @@
 #include "can_converter_frames.h"
 
 #include "can_converter_can.h"
-#include "can.h"
-#include "candef.h"
+#include <hydrogreen/peripherals/can.h>
+#include <hydrogreen/can/candef.h>
 
 #include <string.h>
 #include <zephyr/kernel.h>
@@ -63,7 +63,7 @@ void send_mcu_inputs(const MasterMeasurements *m) {
         .start_button        = m->din.start_button,
         .reset_button        = m->din.reset_button,
         .calibration_button  = m->din.calibration_button,
-        .gas_pedal           = m->din.gas_pedal,
+        .speed_sensor_pulse_raw = m->din.gas_pedal,
     };
     PACK_AND_ENQUEUE(MCU_INPUTS, mcu_inputs, &frame);
     frame_counts.mcu_inputs++;
