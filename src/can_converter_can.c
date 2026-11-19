@@ -147,11 +147,15 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
 
         /* 10 ms — 100 Hz: state machine + faults (high-priority, safety-relevant) */
         if (d.master_status_valid) {
+#if CCU_SEND_MCU_FRAMES
             send_mcu_state(&d.master_status);
+#endif
         }
 
         if (d.master_faults_valid) {
+#if CCU_SEND_MCU_FRAMES
             send_mcu_faults(&d.master_faults);
+#endif
         }
 
         cnt_100ms++;
@@ -162,10 +166,15 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
             cnt_100ms = 0;
 
             if (d.master_measurements_valid) {
+#if CCU_SEND_MCU_FRAMES
                 send_mcu_analog_speed(&d.master_measurements);
                 send_mcu_analog_powertrain(&d.master_measurements);
                 send_mcu_analog_fuel_cell(&d.master_measurements);
-                send_mcu_analog_accessory(&d.master_measurements);
+                send_mcu_analog_accessory_with_protium(
+                    &d.master_measurements,
+                    &d.protium_values,
+                    d.protium_values_valid);
+#endif
             }
         }
 
@@ -174,10 +183,22 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
             cnt_1000ms = 0;
 
             if (d.master_measurements_valid) {
+#if CCU_SEND_MCU_FRAMES
                 send_mcu_analog_pedals(&d.master_measurements);
                 send_mcu_inputs(&d.master_measurements);
+#endif
             }
 
+#if CCU_SEND_FCCU_FROM_PROTIUM
+            if (d.protium_values_valid) {
+                send_fccu_shim_from_protium(
+                    &d.protium_values,
+                    d.protium_operating_state,
+                    d.protium_operating_state_valid);
+            }
+#endif
+
+#if CCU_SEND_PROTIUM_FRAMES
             if (d.protium_operating_state_valid) {
                 send_protium_state(d.protium_operating_state);
             }
@@ -190,6 +211,7 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
                 send_protium_stasis(&d.protium_values);
                 send_protium_misc(&d.protium_values);
             }
+#endif
         }
 
         /* 1 s — diagnostic stats report */
@@ -202,7 +224,9 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
             if (cnt_unassign >= 10) {
                 cnt_unassign = 0;
                 if (d.master_measurements_valid) {
+#if CCU_SEND_MCU_FRAMES
                     send_mcu_analog_unassigned(&d.master_measurements);
+#endif
                 }
             }
 
@@ -217,6 +241,7 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
 
             LOG_INF("=== 1s stats: RS485 RX %u Hz | CAN TX ok %u ===",
                     d_rs485, d_can_ok);
+            LOG_INF("  CCU Hz: STATUS=%u", HZ(ccu_status));
 
             if (d.master_status_valid) {
                 LOG_INF("  MCU state=%d move=%c mc=%c valve=%c",
@@ -256,6 +281,8 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
                     HZ(protium_state), HZ(protium_power), HZ(protium_thermal),
                     HZ(protium_hydrogen), HZ(protium_setpoints),
                     HZ(protium_stasis), HZ(protium_misc));
+            LOG_INF("  FCCU shim Hz: STATE=%u ENV=%u H2=%u",
+                    HZ(fccu_state), HZ(fccu_environment), HZ(fccu_hydrogen));
 
 #undef HZ
 
@@ -324,6 +351,11 @@ void ccu_can_test_send_all(void) {
     d = data;
     k_mutex_unlock(&data_mutex);
 
+#if CCU_SEND_STATUS_FRAMES
+    send_ccu_status((uint8_t)status_led_get());
+#endif
+
+#if CCU_SEND_MCU_FRAMES
     send_mcu_analog_speed(&d.master_measurements);
     send_mcu_analog_pedals(&d.master_measurements);
     send_mcu_analog_powertrain(&d.master_measurements);
@@ -333,9 +365,21 @@ void ccu_can_test_send_all(void) {
     send_mcu_inputs(&d.master_measurements);
     send_mcu_state(&d.master_status);
     send_mcu_faults(&d.master_faults);
+#endif
+
+#if CCU_SEND_PROTIUM_FRAMES
     if (d.protium_operating_state_valid) {
         send_protium_state(d.protium_operating_state);
     }
+    if (d.protium_values_valid) {
+        send_protium_power(&d.protium_values);
+        send_protium_thermal(&d.protium_values);
+        send_protium_hydrogen(&d.protium_values);
+        send_protium_setpoints(&d.protium_values);
+        send_protium_stasis(&d.protium_values);
+        send_protium_misc(&d.protium_values);
+    }
+#endif
 
     LOG_INF("CAN test: all frames enqueued");
 }

@@ -16,6 +16,23 @@ extern "C" {
 
 #include "can_converter.h"
 
+#ifndef CCU_SEND_STATUS_FRAMES
+#define CCU_SEND_STATUS_FRAMES 1
+#endif
+
+#ifndef CCU_SEND_MCU_FRAMES
+#define CCU_SEND_MCU_FRAMES 1
+#endif
+
+#ifndef CCU_SEND_PROTIUM_FRAMES
+#define CCU_SEND_PROTIUM_FRAMES 1
+#endif
+
+/** Repackage Protium RS485 data as FCCU CAN frames for legacy telemetry. */
+#ifndef CCU_SEND_FCCU_FROM_PROTIUM
+#define CCU_SEND_FCCU_FROM_PROTIUM 1
+#endif
+
 /**
  * @brief Running enqueue counts for every CAN frame type.
  *
@@ -23,6 +40,7 @@ extern "C" {
  * Read from the same thread for the 10 s stats report.
  */
 typedef struct {
+    uint32_t ccu_status;
     uint32_t mcu_analog_speed;
     uint32_t mcu_analog_pedals;
     uint32_t mcu_analog_powertrain;
@@ -40,9 +58,17 @@ typedef struct {
     uint32_t protium_setpoints;
     uint32_t protium_stasis;
     uint32_t protium_misc;
+    uint32_t fccu_state;
+    uint32_t fccu_environment;
+    uint32_t fccu_hydrogen;
 } ccu_frame_counts_t;
 
 extern ccu_frame_counts_t frame_counts;
+
+/* CCU frames */
+
+/** @brief Enqueue CCU_STATUS frame (node status LED state). */
+void send_ccu_status(uint8_t status);
 
 /* ── MCU frames ────────────────────────────────────────────────────────── */
 
@@ -73,6 +99,17 @@ void send_mcu_analog_fuel_cell(const MasterMeasurements *m);
 /** @brief Enqueue MCU_ANALOG_ACCESSORY frame (accessory battery). */
 void send_mcu_analog_accessory(const MasterMeasurements *m);
 
+/**
+ * @brief MCU_ANALOG_ACCESSORY with optional Protium fc_v/fc_a alias.
+ *
+ * When Protium electrical readings are present, accessoryBatteryVoltage and
+ * accessoryBatteryCurrent carry Protium FC voltage/current for comparison with
+ * master MCU_ANALOG_FUEL_CELL readings in the frozen telemetry schema.
+ */
+void send_mcu_analog_accessory_with_protium(const MasterMeasurements *m,
+                                            const ProtiumValues *pv,
+                                            bool protium_valid);
+
 /** @brief Enqueue MCU_ANALOG_UNASSIGNED frame (AI1, AI3, AI4, AI5). */
 void send_mcu_analog_unassigned(const MasterMeasurements *m);
 
@@ -98,6 +135,16 @@ void send_protium_stasis(const ProtiumValues *v);
 
 /** @brief Enqueue PROTIUM_MISC frame (ip, tp). */
 void send_protium_misc(const ProtiumValues *v);
+
+/**
+ * @brief Enqueue FCCU_STATE / FCCU_ENVIRONMENT / FCCU_HYDROGEN from Protium.
+ *
+ * Maps Protium fields into FCCU slots consumed by rp4-telemetry release image
+ * (temperatureFuelCellLocation*, fanDutyCycle, protiumState, h2 pressures, …).
+ */
+void send_fccu_shim_from_protium(const ProtiumValues *v,
+                                 ProtiumOperatingState operating_state,
+                                 bool state_valid);
 
 #ifdef __cplusplus
 }

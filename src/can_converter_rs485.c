@@ -9,6 +9,7 @@
 #include <hydrogreen/peripherals/gpio.h>
 #include "proto/master.pb.h"
 #include <hydrogreen/peripherals/rs485.h>
+#include <hydrogreen/peripherals/uart.h>
 
 LOG_MODULE_REGISTER(ccu_rs485, LOG_LEVEL_INF);
 
@@ -18,22 +19,97 @@ volatile uint32_t rs485_frames_received;
 #define CCU_RS485_PARSER_PRIORITY    5
 #define CCU_RS485_RX_QUEUE_DEPTH     16
 #define CCU_RS485_RX_IDLE_TIMEOUT_US 5000
+#define CCU_RS485_LED_FLASH_MS       50
+
+typedef struct {
+    uint8_t data[RS485_RX_BUF_SIZE];
+    size_t  len;
+} rs485_packet_t;
+
+typedef struct {
+    const struct device *uart;
+    struct gpio_dt_spec dir;
+    struct gpio_dt_spec tx_led;
+    struct gpio_dt_spec rx_led;
+} ccu_rs485_t;
 
 K_THREAD_STACK_DEFINE(rs485_parser_stack, CCU_RS485_PARSER_STACK_SIZE);
 static struct k_thread rs485_parser_thread;
 
 K_MSGQ_DEFINE(rs485_rx_queue, sizeof(rs485_packet_t), CCU_RS485_RX_QUEUE_DEPTH, 4);
 
-static rs485_ctx_t rs485 = {
-    .uart               = DEVICE_DT_GET(DT_ALIAS(rs485)),
-    .dir                = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_dir), gpios),
-    .tx_led             = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_tx_led), gpios),
-    .rx_led             = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_rx_led), gpios),
-    .rx_queue           = &rs485_rx_queue,
-    .rx_idle_timeout_us = CCU_RS485_RX_IDLE_TIMEOUT_US,
+static ccu_rs485_t rs485 = {
+    .uart   = DEVICE_DT_GET(DT_ALIAS(rs485)),
+    .dir    = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_dir), gpios),
+    .tx_led = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_tx_led), gpios),
+    .rx_led = GPIO_DT_SPEC_GET(DT_ALIAS(rs485_rx_led), gpios),
 };
 
 static volatile bool test_active;
+static struct k_work_delayable rx_led_off_work;
+static uint8_t rs485_rx_buf_a[RS485_RX_BUF_SIZE];
+static uint8_t rs485_rx_buf_b[RS485_RX_BUF_SIZE];
+static uint8_t *rs485_next_rx_buf = rs485_rx_buf_b;
+
+static void rx_led_off_handler(struct k_work *work) {
+    ARG_UNUSED(work);
+
+    if (!test_active) {
+        gpio_reset(&rs485.rx_led);
+    }
+}
+
+static void enqueue_rx_data(const uint8_t *data, size_t len) {
+    while (len > 0) {
+        rs485_packet_t packet = {0};
+        packet.len = MIN(len, sizeof(packet.data));
+        memcpy(packet.data, data, packet.len);
+
+        if (k_msgq_put(&rs485_rx_queue, &packet, K_NO_WAIT) != 0) {
+            LOG_WRN("RS485 RX queue full, dropping %u bytes", (unsigned int)packet.len);
+        }
+
+        data += packet.len;
+        len -= packet.len;
+    }
+}
+
+static void rs485_uart_callback(const struct device *dev, struct uart_event *evt, void *user_data) {
+    ARG_UNUSED(user_data);
+
+    switch (evt->type) {
+        case UART_RX_RDY:
+            enqueue_rx_data(evt->data.rx.buf + evt->data.rx.offset, evt->data.rx.len);
+            gpio_set(&rs485.rx_led);
+            k_work_reschedule(&rx_led_off_work, K_MSEC(CCU_RS485_LED_FLASH_MS));
+            break;
+        case UART_RX_BUF_REQUEST:
+            (void)uart_rx_buf_rsp(dev, rs485_next_rx_buf, RS485_RX_BUF_SIZE);
+            break;
+        case UART_RX_BUF_RELEASED:
+            rs485_next_rx_buf = evt->data.rx_buf.buf;
+            break;
+        case UART_RX_DISABLED:
+            rs485_next_rx_buf = rs485_rx_buf_b;
+            (void)uart_rx_init(dev, rs485_rx_buf_a, sizeof(rs485_rx_buf_a),
+                               CCU_RS485_RX_IDLE_TIMEOUT_US);
+            break;
+        case UART_TX_DONE:
+            rs485_on_tx_done();
+            if (!test_active) {
+                gpio_reset(&rs485.tx_led);
+            }
+            break;
+        case UART_TX_ABORTED:
+            rs485_on_tx_aborted(&rs485.dir);
+            if (!test_active) {
+                gpio_reset(&rs485.tx_led);
+            }
+            break;
+        default:
+            break;
+    }
+}
 
 static void on_frame(const uint8_t *decoded, size_t len, void *user_data) {
     ARG_UNUSED(user_data);
@@ -119,7 +195,13 @@ void ccu_rs485_test_set(bool active) {
 }
 
 void ccu_rs485_init(void) {
-    rs485_init(&rs485);
+    rs485_init(rs485.uart, &rs485.dir);
+    gpio_init(&rs485.rx_led, GPIO_OUTPUT_INACTIVE);
+    gpio_init(&rs485.tx_led, GPIO_OUTPUT_INACTIVE);
+    k_work_init_delayable(&rx_led_off_work, rx_led_off_handler);
+    uart_callback_set_(rs485.uart, rs485_uart_callback);
+    uart_rx_init(rs485.uart, rs485_rx_buf_a, sizeof(rs485_rx_buf_a),
+                 CCU_RS485_RX_IDLE_TIMEOUT_US);
 
     k_tid_t tid = k_thread_create(&rs485_parser_thread,
                                   rs485_parser_stack,

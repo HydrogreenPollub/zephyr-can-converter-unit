@@ -1,9 +1,11 @@
 #include "can_converter.h"
 #include "can_converter_can.h"
+#include "can_converter_frames.h"
 #include "can_converter_rs485.h"
 #include <hydrogreen/peripherals/status_led.h>
 #include <hydrogreen/peripherals/test_button.h>
 
+#include <stdint.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
@@ -11,6 +13,14 @@ LOG_MODULE_REGISTER(ccu_board, LOG_LEVEL_INF);
 
 K_MUTEX_DEFINE(data_mutex);
 master_data_t data = {0};
+
+static void broadcast_status(status_led_state_t state) {
+#if CCU_SEND_STATUS_FRAMES
+    send_ccu_status((uint8_t)state);
+#else
+    ARG_UNUSED(state);
+#endif
+}
 
 /* ── Test button callback ─────────────────────────────────────────────────── */
 static void on_test_button(void) {
@@ -33,6 +43,6 @@ void ccu_board_init(void) {
     static const struct gpio_dt_spec test_btn_gpio =
         GPIO_DT_SPEC_GET(DT_ALIAS(button_test), gpios);
 
-    status_led_init(&status_led_gpio, NULL);
+    status_led_init(&status_led_gpio, broadcast_status);
     test_button_init(&test_btn_gpio, on_test_button);
 }

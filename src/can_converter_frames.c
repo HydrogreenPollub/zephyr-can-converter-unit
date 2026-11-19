@@ -33,6 +33,14 @@ static void enqueue_frame(uint32_t id, const uint8_t *data, uint8_t len) {
 
 /* ── MCU frame encoders ────────────────────────────────────────────────── */
 
+void send_ccu_status(uint8_t status) {
+    struct candef_ccu_status_t frame = {
+        .status = candef_ccu_status_status_encode(status),
+    };
+    PACK_AND_ENQUEUE(CCU_STATUS, ccu_status, &frame);
+    frame_counts.ccu_status++;
+}
+
 void send_mcu_time_sync(uint32_t ms_tick, uint32_t cycle_tick) {
     struct candef_mcu_time_sync_t frame = {
         .time_ms      = candef_mcu_time_sync_time_ms_encode((double)ms_tick),
@@ -157,13 +165,33 @@ void send_mcu_analog_fuel_cell(const MasterMeasurements *m) {
 }
 
 void send_mcu_analog_accessory(const MasterMeasurements *m) {
+    send_mcu_analog_accessory_with_protium(m, NULL, false);
+}
+
+void send_mcu_analog_accessory_with_protium(const MasterMeasurements *m,
+                                            const ProtiumValues *pv,
+                                            bool protium_valid) {
+    double acc_v = (double)m->accessory_battery_voltage;
+    double acc_a = (double)m->accessory_battery_current;
+
+    if (protium_valid && pv != NULL && pv->fc_v > 0.1f) {
+        acc_v = (double)pv->fc_v;
+        if (pv->fc_a > 0.0f) {
+            acc_a = (double)pv->fc_a;
+        } else if (pv->fc_w > 0.0f) {
+            acc_a = (double)pv->fc_w / (double)pv->fc_v;
+        } else {
+            acc_a = 0.0;
+        }
+    }
+
     struct candef_mcu_analog_accessory_t frame = {
         .accessory_battery_current =
             candef_mcu_analog_accessory_accessory_battery_current_encode(
-                (double)m->accessory_battery_current),
+                acc_a),
         .accessory_battery_voltage =
             candef_mcu_analog_accessory_accessory_battery_voltage_encode(
-                (double)m->accessory_battery_voltage),
+                acc_v),
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_ACCESSORY, mcu_analog_accessory, &frame);
     frame_counts.mcu_analog_accessory++;
@@ -253,4 +281,48 @@ void send_protium_misc(const ProtiumValues *v) {
     };
     PACK_AND_ENQUEUE(PROTIUM_MISC, protium_misc, &frame);
     frame_counts.protium_misc++;
+}
+
+/* ── FCCU shim (Protium → legacy telemetry slots) ─────────────────────── */
+
+void send_fccu_shim_from_protium(const ProtiumValues *v,
+                                 ProtiumOperatingState operating_state,
+                                 bool state_valid) {
+    if (v == NULL) {
+        return;
+    }
+
+    if (state_valid) {
+        struct candef_fccu_state_t state_frame;
+        candef_fccu_state_init(&state_frame);
+        state_frame.state =
+            candef_fccu_state_state_encode((double)operating_state);
+        state_frame.fan_duty =
+            candef_fccu_state_fan_duty_encode((double)v->fan);
+        PACK_AND_ENQUEUE(FCCU_STATE, fccu_state, &state_frame);
+        frame_counts.fccu_state++;
+    }
+
+    struct candef_fccu_environment_t env_frame;
+    candef_fccu_environment_init(&env_frame);
+    env_frame.fc_temp_c =
+        candef_fccu_environment_fc_temp_c_encode((double)v->fct1);
+    env_frame.ambient_temp_c =
+        candef_fccu_environment_ambient_temp_c_encode((double)v->fct2);
+    /* Legacy telemetry maps ambient_humidity → fuelCellEnergyAccumulated. */
+    env_frame.ambient_humidity =
+        candef_fccu_environment_ambient_humidity_encode((double)v->energy);
+    PACK_AND_ENQUEUE(FCCU_ENVIRONMENT, fccu_environment, &env_frame);
+    frame_counts.fccu_environment++;
+
+    struct candef_fccu_hydrogen_t h2_frame;
+    candef_fccu_hydrogen_init(&h2_frame);
+    h2_frame.h2_hp_pressure =
+        candef_fccu_hydrogen_h2_hp_pressure_encode((double)v->h2p1);
+    h2_frame.h2_lp_pressure =
+        candef_fccu_hydrogen_h2_lp_pressure_encode((double)v->h2p2);
+    h2_frame.h2_flow =
+        candef_fccu_hydrogen_h2_flow_encode((double)v->blw);
+    PACK_AND_ENQUEUE(FCCU_HYDROGEN, fccu_hydrogen, &h2_frame);
+    frame_counts.fccu_hydrogen++;
 }
