@@ -21,8 +21,8 @@ extern volatile uint32_t rs485_frames_received;
 /**
  * @brief Initialise the RS485 subsystem and start the receive thread.
  *
- * Calls rs485_init() on the internal context (configures hardware, registers
- * the UART callback, starts DMA reception), then spawns the parser thread.
+ * Configures hardware, registers the CCU UART callback, starts DMA reception,
+ * then spawns the parser thread.
  */
 void ccu_rs485_init(void);
 void ccu_rs485_test_set(bool active);

@@ -49,6 +49,7 @@ message MasterMeasurements {
     DigitalInputs din = 17;
     float rpm = 18;
     float speed = 19;
+    optional float fuel_cell_stack_output_current = 20;
 }
 
 /**

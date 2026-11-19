@@ -82,6 +82,7 @@ void send_mcu_faults(const MasterFaults *f) {
         .emergency_switch            = f->emg_emergency_switch,
         .emergency_dead_mans_switch  = f->emg_dead_mans_switch,
         .emergency_leakage_detected  = f->emg_leakage_sensor_switch,
+        .emergency_hydrogen_leakage_voltage = f->emg_hydrogen_leakage_voltage,
         /* Map single SCADE error flags to both low+high DBC fields */
         .error_fc_v_low  = f->err_fuel_cell_output_voltage,
         .error_fc_v_high = f->err_fuel_cell_output_voltage,
@@ -146,10 +147,11 @@ void send_mcu_analog_powertrain(const MasterMeasurements *m) {
 }
 
 void send_mcu_analog_fuel_cell(const MasterMeasurements *m) {
+    const double current = (double)m->fuel_cell_output_current;
     struct candef_mcu_analog_fuel_cell_t frame = {
         .fuel_cell_output_current =
             candef_mcu_analog_fuel_cell_fuel_cell_output_current_encode(
-                (double)m->fuel_cell_output_current),
+                current < 0.0 ? -current : current),
         .fuel_cell_output_voltage =
             candef_mcu_analog_fuel_cell_fuel_cell_output_voltage_encode(
                 (double)m->fuel_cell_output_voltage),
@@ -162,6 +164,18 @@ void send_mcu_analog_fuel_cell(const MasterMeasurements *m) {
     };
     PACK_AND_ENQUEUE(MCU_ANALOG_FUEL_CELL, mcu_analog_fuel_cell, &frame);
     frame_counts.mcu_analog_fuel_cell++;
+
+    if (m->has_fuel_cell_stack_output_current) {
+        struct candef_mcu_fuel_cell_currents_t currents = {
+            .fuel_cell_stack_output_current =
+                candef_mcu_fuel_cell_currents_fuel_cell_stack_output_current_encode(
+                    CLAMP((double)m->fuel_cell_stack_output_current, -327.68, 327.67)),
+            .fuel_cell_output_current =
+                candef_mcu_fuel_cell_currents_fuel_cell_output_current_encode(
+                    CLAMP((double)m->fuel_cell_output_current, -327.68, 327.67)),
+        };
+        PACK_AND_ENQUEUE(MCU_FUEL_CELL_CURRENTS, mcu_fuel_cell_currents, &currents);
+    }
 }
 
 void send_mcu_analog_accessory(const MasterMeasurements *m) {

@@ -120,7 +120,6 @@ static void ccu_can_tx_thread(void *p1, void *p2, void *p3) {
 }
 
 static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
-    uint8_t cnt_100ms    = 0;
     uint8_t cnt_1000ms   = 0;
     uint8_t cnt_1s       = 0;
     uint8_t cnt_unassign = 0;  /* 0.1 Hz: send MCU_ANALOG_UNASSIGNED every 10 s */
@@ -129,13 +128,19 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
     uint32_t           prev_can_tx_ok = 0;
     ccu_frame_counts_t prev_frames    = {0};
 
+    const int64_t period_ms = 10;
+    int64_t next_publish_ms = k_uptime_get() + period_ms;
     while (1) {
-        k_sleep(K_MSEC(10));
+        k_sleep(K_TIMEOUT_ABS_MS(next_publish_ms));
+        next_publish_ms += period_ms;
+        const int64_t now_ms = k_uptime_get();
+        if (next_publish_ms <= now_ms) {
+            next_publish_ms += period_ms * (1 + (now_ms - next_publish_ms) / period_ms);
+        }
 
         /* Suspend all periodic TX during DFU — reduces bus contention so the
          * device only participates as a receiver + ACK node. */
         if (can_dfu_is_active()) {
-            cnt_100ms  = 0;
             cnt_1000ms = 0;
             continue;
         }
@@ -158,24 +163,16 @@ static void ccu_can_periodic_thread(void *p1, void *p2, void *p3) {
 #endif
         }
 
-        cnt_100ms++;
         cnt_1000ms++;
 
-        /* 100 ms — 10 Hz: speed + powertrain analog */
-        if (cnt_100ms >= 10) {
-            cnt_100ms = 0;
-
-            if (d.master_measurements_valid) {
+        /* Publish fast analog measurements on each 10 ms iteration. */
+        if (d.master_measurements_valid) {
 #if CCU_SEND_MCU_FRAMES
-                send_mcu_analog_speed(&d.master_measurements);
-                send_mcu_analog_powertrain(&d.master_measurements);
-                send_mcu_analog_fuel_cell(&d.master_measurements);
-                send_mcu_analog_accessory_with_protium(
-                    &d.master_measurements,
-                    &d.protium_values,
-                    d.protium_values_valid);
+            send_mcu_analog_speed(&d.master_measurements);
+            send_mcu_analog_powertrain(&d.master_measurements);
+            send_mcu_analog_fuel_cell(&d.master_measurements);
+            send_mcu_analog_accessory(&d.master_measurements);
 #endif
-            }
         }
 
         /* 1000 ms — 1 Hz: slow analog + digital inputs + Protium */

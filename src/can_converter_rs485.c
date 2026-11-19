@@ -22,11 +22,6 @@ volatile uint32_t rs485_frames_received;
 #define CCU_RS485_LED_FLASH_MS       50
 
 typedef struct {
-    uint8_t data[RS485_RX_BUF_SIZE];
-    size_t  len;
-} rs485_packet_t;
-
-typedef struct {
     const struct device *uart;
     struct gpio_dt_spec dir;
     struct gpio_dt_spec tx_led;
@@ -95,13 +90,13 @@ static void rs485_uart_callback(const struct device *dev, struct uart_event *evt
                                CCU_RS485_RX_IDLE_TIMEOUT_US);
             break;
         case UART_TX_DONE:
-            rs485_on_tx_done();
+            rs485_set_rx(&rs485.dir);
             if (!test_active) {
                 gpio_reset(&rs485.tx_led);
             }
             break;
         case UART_TX_ABORTED:
-            rs485_on_tx_aborted(&rs485.dir);
+            rs485_set_rx(&rs485.dir);
             if (!test_active) {
                 gpio_reset(&rs485.tx_led);
             }
@@ -195,7 +190,14 @@ void ccu_rs485_test_set(bool active) {
 }
 
 void ccu_rs485_init(void) {
-    rs485_init(rs485.uart, &rs485.dir);
+    /* CCU owns the RX callback to keep its queue and LED timing. */
+    if (uart_device_init(rs485.uart) != 0) {
+        return;
+    }
+    if (gpio_init(&rs485.dir, GPIO_OUTPUT_INACTIVE) != 0) {
+        return;
+    }
+    rs485_set_rx(&rs485.dir);
     gpio_init(&rs485.rx_led, GPIO_OUTPUT_INACTIVE);
     gpio_init(&rs485.tx_led, GPIO_OUTPUT_INACTIVE);
     k_work_init_delayable(&rx_led_off_work, rx_led_off_handler);

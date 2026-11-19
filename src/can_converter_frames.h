@@ -30,7 +30,7 @@ extern "C" {
 
 /** Repackage Protium RS485 data as FCCU CAN frames for legacy telemetry. */
 #ifndef CCU_SEND_FCCU_FROM_PROTIUM
-#define CCU_SEND_FCCU_FROM_PROTIUM 1
+#define CCU_SEND_FCCU_FROM_PROTIUM 0
 #endif
 
 /**
